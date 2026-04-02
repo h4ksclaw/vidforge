@@ -18,6 +18,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
   generate:
@@ -58,6 +60,8 @@ jobs:
           RECIPE="${{ github.event.inputs.recipe || 'config/recipes/anime_heights_dbz.yaml' }}"
           SKIP_BG="${{ github.event.inputs.skip_bg_removal || 'false' }}"
           uv run vidforge generate "$RECIPE" --export-dag output/dag.svg
+          # Write recipe name for pages
+          echo "$RECIPE" > output/recipe.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
