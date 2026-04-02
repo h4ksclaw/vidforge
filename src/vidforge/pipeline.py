@@ -359,7 +359,7 @@ def run_pipeline(
     )
 
     if export_dag:
-        dr.display_all_functions(output_file=export_dag)
+        dr.display_all_functions(output_file_path=export_dag)
 
     result = dr.execute(
         ["render_video"],
