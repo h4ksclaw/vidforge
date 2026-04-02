@@ -203,6 +203,7 @@ header h1 a:hover {{ color: #58a6ff; }}
     <span class="badge" id="node-count"></span>
   </div>
   <div class="header-right">
+    <a class="btn" href="https://github.com/{GITHUB_REPO}" target="_blank" style="text-decoration:none">⌨ Code</a>
     <button class="btn" id="btn-fit">\u229e Fit</button>
     <button class="btn" id="btn-reset">\u21ba Reset</button>
   </div>
@@ -220,7 +221,7 @@ const FN_META = {fn_meta_json};
 const GITHUB_BASE = "https://github.com/{GITHUB_REPO}/blob/main/{PIPELINE_PATH}";
 const typeColors = {{ config: '#da3633', source: '#1f6feb', fetch: '#a371f7', process: '#f0883e', transform: '#3fb950', render: '#58a6ff', orchestrator: '#f778ba' }};
 const typeBg = {{ config: '#da363322', source: '#1f6feb22', fetch: '#a371f722', process: '#f0883e22', transform: '#3fb95022', render: '#58a6ff22', orchestrator: '#f778ba22' }};
-const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pipeline_inputs', 'input', 'function'];
+const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pipeline_inputs', 'input', 'function', 'skip_bg_removal'];
 
 (function() {{
   const container = document.getElementById('dag-container');
