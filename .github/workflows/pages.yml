@@ -10,6 +10,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read
 
 concurrency:
   group: "pages"
@@ -26,30 +27,39 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download output artifact
-        uses: actions/download-artifact@v4
-        with:
-          run-id: ${{ github.event.workflow_run.id }}
-          name: output
-          path: site-output
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p site-output
+          gh run download ${{ github.event.workflow_run.id }} \
+            --repo ${{ github.repository }} \
+            -n output \
+            -D site-output
 
       - name: Build pages site
         run: |
           mkdir -p site
           cp site-output/* site/ 2>/dev/null || true
 
-          # Extract recipe name for the title
-          RECIPE="Anime Heights"
-          if [ -f site-output/recipe.txt ]; then
-            RECIPE=$(head -1 site-output/recipe.txt)
+          RECIPE_NAME="VidForge"
+          if [ -f site/recipe.txt ]; then
+            RECIPE_NAME=$(head -1 site/recipe.txt | xargs basename .yaml)
           fi
 
-          cat > site/index.html << 'HTMLEOF'
+          HAS_VIDEO="false"
+          HAS_STRIP="false"
+          HAS_DAG="false"
+          [ -f site/scroll.mp4 ] && HAS_VIDEO="true"
+          [ -f site/strip.png ] && HAS_STRIP="true"
+          [ -f site/dag.svg ] && HAS_DAG="true"
+
+          cat > site/index.html << HTMLEOF
           <!DOCTYPE html>
           <html lang="en">
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>VidForge Pipeline Output</title>
+            <title>VidForge — ${RECIPE_NAME}</title>
             <style>
               * { margin: 0; padding: 0; box-sizing: border-box; }
               body {
@@ -64,91 +74,47 @@ jobs:
                 border-bottom: 1px solid #2a2a3e;
                 text-align: center;
               }
-              header h1 {
-                font-size: 1.8rem;
-                color: #fff;
-                margin-bottom: 0.3rem;
-              }
+              header h1 { font-size: 1.8rem; color: #fff; margin-bottom: 0.3rem; }
               header p { color: #888; font-size: 0.9rem; }
               .timestamp { color: #666; font-size: 0.8rem; margin-top: 0.5rem; }
               .sections {
-                max-width: 1200px;
-                margin: 2rem auto;
-                padding: 0 1rem;
-                display: flex;
-                flex-direction: column;
-                gap: 2rem;
+                max-width: 1200px; margin: 2rem auto; padding: 0 1rem;
+                display: flex; flex-direction: column; gap: 2rem;
               }
               .section {
-                background: #12121a;
-                border: 1px solid #2a2a3e;
-                border-radius: 12px;
-                overflow: hidden;
+                background: #12121a; border: 1px solid #2a2a3e;
+                border-radius: 12px; overflow: hidden;
               }
               .section-header {
-                padding: 1rem 1.5rem;
-                background: #1a1a2e;
+                padding: 1rem 1.5rem; background: #1a1a2e;
                 border-bottom: 1px solid #2a2a3e;
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
+                display: flex; align-items: center; gap: 0.5rem;
               }
               .section-header h2 { font-size: 1.1rem; color: #fff; }
               .section-body { padding: 1.5rem; }
-              video {
-                width: 100%;
-                max-height: 70vh;
-                border-radius: 8px;
-                background: #000;
-              }
-              .strip-container {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                padding: 1rem 0;
-              }
-              .strip-container img {
-                height: 400px;
-                border-radius: 8px;
-              }
-              .dag-container {
-                overflow-x: auto;
-                text-align: center;
-              }
-              .dag-container img {
-                max-width: 100%;
-                border-radius: 8px;
-              }
-              .placeholder {
-                color: #555;
-                font-style: italic;
-                padding: 2rem;
-                text-align: center;
-              }
-              footer {
-                text-align: center;
-                padding: 2rem;
-                color: #444;
-                font-size: 0.8rem;
-              }
+              video { width: 100%; max-height: 70vh; border-radius: 8px; background: #000; }
+              .strip-container { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 1rem 0; }
+              .strip-container img { height: 400px; border-radius: 8px; }
+              .dag-container { overflow-x: auto; text-align: center; }
+              .dag-container img { max-width: 100%; border-radius: 8px; }
+              .placeholder { color: #555; font-style: italic; padding: 2rem; text-align: center; }
+              footer { text-align: center; padding: 2rem; color: #444; font-size: 0.8rem; }
               footer a { color: #666; text-decoration: none; }
             </style>
           </head>
           <body>
             <header>
-              <h1>🎬 VidForge Pipeline Output</h1>
+              <h1>🎬 VidForge — ${RECIPE_NAME}</h1>
               <p>Generated by GitHub Actions</p>
               <div class="timestamp" id="timestamp"></div>
             </header>
             <div class="sections">
               <div class="section">
-                <div class="section-header">
-                  <h2>📹 Video</h2>
-                </div>
+                <div class="section-header"><h2>📹 Video</h2></div>
                 <div class="section-body">
-                  HTMLEOF
+          HTMLEOF
 
-          # Add video if it exists
-          if [ -f site/scroll.mp4 ]; then
+          if [ "$HAS_VIDEO" = "true" ]; then
             cat >> site/index.html << 'VIDEOF'
                   <video controls preload="metadata">
                     <source src="scroll.mp4" type="video/mp4">
@@ -163,40 +129,32 @@ jobs:
                 </div>
               </div>
               <div class="section">
-                <div class="section-header">
-                  <h2>🖼️ Character Strip</h2>
-                </div>
-                <div class="section-body">
-                  <div class="strip-container">
+                <div class="section-header"><h2>🖼️ Character Strip</h2></div>
+                <div class="section-body"><div class="strip-container">
           HTMLEOF2
 
-          if [ -f site/strip.png ]; then
+          if [ "$HAS_STRIP" = "true" ]; then
             echo '                    <img src="strip.png" alt="Character height strip">' >> site/index.html
           else
             echo '                    <p class="placeholder">No strip image</p>' >> site/index.html
           fi
 
           cat >> site/index.html << 'HTMLEOF3'
-                  </div>
-                </div>
+                </div></div>
               </div>
               <div class="section">
-                <div class="section-header">
-                  <h2>📊 Pipeline DAG</h2>
-                </div>
-                <div class="section-body">
-                  <div class="dag-container">
+                <div class="section-header"><h2>📊 Pipeline DAG</h2></div>
+                <div class="section-body"><div class="dag-container">
           HTMLEOF3
 
-          if [ -f site/dag.svg ]; then
+          if [ "$HAS_DAG" = "true" ]; then
             echo '                    <img src="dag.svg" alt="Pipeline DAG">' >> site/index.html
           else
             echo '                    <p class="placeholder">No DAG exported</p>' >> site/index.html
           fi
 
           cat >> site/index.html << 'HTMLEOF4'
-                  </div>
-                </div>
+                </div></div>
               </div>
             </div>
             <footer>
