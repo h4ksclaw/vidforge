@@ -1,0 +1,10 @@
+name: "Dragon Ball Z Heights"
+source: fandom
+source_config:
+  wiki: "dragonball.fandom.com"
+  characters_file: "config/characters/dragon_ball_z.yaml"
+target: youtube
+template: comparison
+music_query: "dragon ball z instrumental background music no copyright"
+metadata:
+  show: "Dragon Ball Z"

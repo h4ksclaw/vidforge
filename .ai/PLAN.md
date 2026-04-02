@@ -204,6 +204,44 @@ Stored as GitHub Secrets, accessed in Actions:
 - Skip keyword "key" matches "Monkey" — removed
 - Stray `continue` bugs are silent killers — always add logging
 
+## Code Quality Policy
+
+### Testing
+- **Coverage gate: 80% minimum** — enforced on git push via pre-commit
+- **pytest** with `--strict-markers -x` (fail fast on first error)
+- Every new module gets a `tests/test_<module>.py` with at least basic tests
+- Tests for data validation (Pydantic models), edge cases, error paths
+- `TODO` stubs are excluded from coverage (`exclude_lines`)
+- CLI and `__init__.py` are excluded from coverage
+
+### Linting & Formatting
+- **ruff** — lint (isort, pyupgrade, flake8-bugbear, simplify, ruff rules)
+- **ruff format** — double quotes, 4-space indent, 100 char line length
+- **pre-commit hooks** fire on every `git commit`:
+  - ruff check + format
+  - YAML/TOML validation
+  - No trailing whitespace / missing EOF
+  - No scoped imports (all imports at top of file)
+  - No relative imports in `src/` (always `from vidforge.xxx`)
+  - No files > 500KB
+- **On `git push`** (CI enforcement):
+  - pytest with coverage gate (≥80%)
+  - No direct commits to `main`
+
+### Package Management
+- **uv** — fast, deterministic, locked deps via `uv.lock`
+- All commands run via `uv run` (auto-activates venv)
+- `pyproject.toml` is the single source of truth for deps
+
+### Review Checklist (self-enforced before commits)
+- [ ] New code has tests
+- [ ] `uv run pytest --cov` passes
+- [ ] `uv run ruff check src/ tests/` passes
+- [ ] No scoped or relative imports
+- [ ] Data validation tested (Pydantic models)
+- [ ] TODO stubs filled in or explicitly left with tests skipped
+
+
 ## Open Questions
 
 - [ ] Cron frequency? Weekly? Per-show rotation?

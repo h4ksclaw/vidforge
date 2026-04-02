@@ -3,17 +3,17 @@ name: Generate Videos
 on:
   schedule:
     # Weekly Monday noon UTC
-    - cron: '0 12 * * 1'
+    - cron: "0 12 * * 1"
   workflow_dispatch:
     inputs:
       recipe:
-        description: 'Recipe file path'
+        description: "Recipe file path"
         required: false
-        default: 'config/recipes/anime_heights_dbz.yaml'
+        default: "config/recipes/anime_heights_dbz.yaml"
       target:
-        description: 'Platform target'
+        description: "Platform target"
         required: false
-        default: 'youtube'
+        default: "youtube"
 
 permissions:
   contents: read
@@ -21,104 +21,59 @@ permissions:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
       - uses: actions/checkout@v4
 
       - name: Cache assets
         uses: actions/cache@v4
         with:
-          path: ~/.cache/vidforge
-          key: vidforge-${{ hashFiles('config/characters/*.yaml') }}
+          path: ~/.cache/vidgen
+          key: vidgen-${{ hashFiles('config/characters/*.yaml') }}
           restore-keys: |
-            vidforge-
+            vidgen-
 
       - name: Install system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y graphviz
+        run: sudo apt-get update && sudo apt-get install -y graphviz ffmpeg
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install vidforge
-        run: pip install -e ".[all,music]"
+      - name: Install uv
+        run: pip install uv
 
-      - name: Generate DAG
+      - name: Install deps
+        run: uv sync --extra dev --extra music
+
+      - name: Lint + test
+        run: uv run ruff check src/ tests/ && uv run pytest --cov -q
+
+      - name: Test Fandom API access
         run: |
-          RECIPE=${{ github.event.inputs.recipe || 'config/recipes/anime_heights_dbz.yaml' }}
-          vidforge dag "$RECIPE" --output docs/dag.html --format html
-
-      - name: Generate video
-        run: |
-          RECIPE=${{ github.event.inputs.recipe || 'config/recipes/anime_heights_dbz.yaml' }}
-          TARGET=${{ github.event.inputs.target || 'youtube' }}
-          vidforge generate "$RECIPE" --target "$TARGET"
+          uv run python -c "
+          import urllib.request, json
+          HEADERS = {'User-Agent': 'VidForge/0.1 (github.com/h4ksclaw/vidforge)'}
+          url = 'https://dragonball.fandom.com/api.php?action=query&titles=Krillin&prop=info&format=json'
+          req = urllib.request.Request(url, headers=HEADERS)
+          resp = urllib.request.urlopen(req, timeout=15)
+          data = json.loads(resp.read())
+          page_id = list(data['query']['pages'].keys())[0]
+          if page_id != '-1':
+              print('✅ Fandom API accessible from GitHub Actions')
+          else:
+              print('❌ Fandom API blocked')
+              exit(1)
+          "
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: videos
-          path: output/*.mp4
+          name: output
+          path: output/
           retention-days: 7
-
-  upload:
-    needs: generate
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'schedule'
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: videos
-          path: output/
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install vidforge
-        run: pip install -e ".[youtube]"
-
-      - name: Upload to YouTube
-        env:
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        run: |
-          for video in output/*.mp4; do
-            vidforge upload "$video" --platform youtube
-          done
-
-  deploy-pages:
-    needs: generate
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      pages: write
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download DAG
-        uses: actions/download-artifact@v4
-        with:
-          name: videos
-          path: output/
-
-      - name: Build Pages
-        run: |
-          mkdir -p docs
-          cp docs/dag.html docs/index.html 2>/dev/null || true
-          # TODO: Generate preview page with video thumbnails
-
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
-        with:
-          artifact_name: github-pages
+          if-no-files-found: ignore

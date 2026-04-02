@@ -1,0 +1,70 @@
+characters:
+  - name: Dende
+    wiki_page: Dende
+    height: 112
+  - name: Guldo
+    wiki_page: Guldo
+    height: 122
+  - name: Krillin
+    wiki_page: Krillin
+    height: 153
+  - name: Beerus
+    wiki_page: Beerus
+    height: 156
+  - name: Frieza
+    wiki_page: Frieza
+    height: 158
+  - name: Videl
+    wiki_page: Videl
+    height: 158
+  - name: Vegeta
+    wiki_page: Vegeta
+    height: 164
+  - name: Android 18
+    wiki_page: Android_18
+    height: 165
+  - name: Master Roshi
+    wiki_page: Master_Roshi
+    height: 165
+  - name: Trunks
+    wiki_page: Trunks
+    height: 170
+  - name: Goku
+    wiki_page: Goku
+    height: 175
+  - name: Gohan
+    wiki_page: Gohan
+    height: 176
+  - name: Yamcha
+    wiki_page: Yamcha
+    height: 183
+  - name: Captain Ginyu
+    wiki_page: Captain_Ginyu
+    height: 184
+  - name: Mr. Satan
+    wiki_page: Mr._Satan
+    height: 188
+  - name: Raditz
+    wiki_page: Raditz
+    height: 193
+  - name: Majin Buu
+    wiki_page: Majin_Buu
+    height: 200
+  - name: Nappa
+    wiki_page: Nappa
+    height: 206
+  - name: Cell
+    wiki_page: Cell
+    height: 210
+  - name: Piccolo
+    wiki_page: Piccolo
+    height: 226
+  - name: Whis
+    wiki_page: Whis
+    height: 230
+  - name: Android 16
+    wiki_page: Android_16
+    height: 240
+  - name: King Cold
+    wiki_page: King_Cold
+    height: 254

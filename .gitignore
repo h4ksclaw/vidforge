@@ -12,6 +12,8 @@ output/
 *.mp4
 *.png
 *.svg
-!docs/
 .cache/
 .env
+.coverage
+htmlcov/
+.pytest_cache/
