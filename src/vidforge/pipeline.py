@@ -8,10 +8,15 @@ from typing import Any
 import numpy as np
 import yaml
 from hamilton import driver
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFilter
+from PIL import ImageFont
 
 from vidforge.assets.images import fetch_and_process_image
-from vidforge.models import Item, Recipe, Target
+from vidforge.models import Item
+from vidforge.models import Recipe
+from vidforge.models import Target
 from vidforge.sources.fandom import find_best_image
 
 # ─── Configuration ───────────────────────────────────────────────────────────

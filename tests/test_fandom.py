@@ -1,12 +1,11 @@
 """Tests for vidforge.sources.fandom — Fandom wiki API source."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import httpx
 
-from vidforge.sources.fandom import (
-    parse_height,
-)
+from vidforge.sources.fandom import parse_height
 
 
 class TestParseHeight:

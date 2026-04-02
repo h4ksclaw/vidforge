@@ -1,6 +1,10 @@
 """Tests for vidforge.assets.cache — content-hash caching."""
 
-from vidforge.assets.cache import clear_cache, content_hash, get_cached, item_cache_key, put_cached
+from vidforge.assets.cache import clear_cache
+from vidforge.assets.cache import content_hash
+from vidforge.assets.cache import get_cached
+from vidforge.assets.cache import item_cache_key
+from vidforge.assets.cache import put_cached
 from vidforge.models import Item
 
 

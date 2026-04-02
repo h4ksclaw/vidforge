@@ -2,7 +2,9 @@
 
 from PIL import Image
 
-from vidforge.assets.bg_remove import content_ratio, height_fill, score_image
+from vidforge.assets.bg_remove import content_ratio
+from vidforge.assets.bg_remove import height_fill
+from vidforge.assets.bg_remove import score_image
 
 
 def _make_test_image(width: int, height: int, content_height: int | None = None) -> Image.Image:

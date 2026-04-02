@@ -2,7 +2,8 @@
 
 import re
 import time
-from typing import Any, cast
+from typing import Any
+from typing import cast
 from urllib.parse import unquote
 
 import httpx

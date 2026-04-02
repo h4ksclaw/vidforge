@@ -76,6 +76,7 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["vidforge"]
+force-single-line = true
 
 [tool.ruff.format]
 quote-style = "double"

@@ -5,8 +5,12 @@ import io
 import httpx
 from PIL import Image
 
-from vidforge.assets.bg_remove import content_ratio, height_fill, remove_background
-from vidforge.assets.cache import get_cached, item_cache_key, put_cached
+from vidforge.assets.bg_remove import content_ratio
+from vidforge.assets.bg_remove import height_fill
+from vidforge.assets.bg_remove import remove_background
+from vidforge.assets.cache import get_cached
+from vidforge.assets.cache import item_cache_key
+from vidforge.assets.cache import put_cached
 from vidforge.models import Item
 
 HEADERS = {"User-Agent": "VidForge/0.1 (github.com/h4ksclaw/vidforge)"}

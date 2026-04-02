@@ -1,6 +1,7 @@
 """Background removal using rembg — two-pass approach."""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+from typing import Any
 
 import numpy as np
 from PIL import Image

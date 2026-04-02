@@ -1,6 +1,11 @@
 """Tests for vidforge.models — Pydantic data models."""
 
-from vidforge.models import Effect, Item, Recipe, Scene, Target, Timeline
+from vidforge.models import Effect
+from vidforge.models import Item
+from vidforge.models import Recipe
+from vidforge.models import Scene
+from vidforge.models import Target
+from vidforge.models import Timeline
 
 
 class TestItem:

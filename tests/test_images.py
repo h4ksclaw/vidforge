@@ -1,11 +1,13 @@
 """Tests for vidforge.assets.images — image fetching and processing."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import httpx
 from PIL import Image
 
-from vidforge.assets.images import download_image, fetch_and_process_image
+from vidforge.assets.images import download_image
+from vidforge.assets.images import fetch_and_process_image
 from vidforge.models import Item
 
 
@@ -53,7 +55,8 @@ class TestFetchAndProcessImage:
     def test_cached(self) -> None:
         item = Item(name="Cached", value=100, image_url="https://example.com/cached.png")
         # Put something in cache first
-        from vidforge.assets.cache import item_cache_key, put_cached
+        from vidforge.assets.cache import item_cache_key
+        from vidforge.assets.cache import put_cached
 
         key = item_cache_key(item)
         put_cached(key, _make_png_bytes())
