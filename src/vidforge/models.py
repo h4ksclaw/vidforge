@@ -1,5 +1,7 @@
 """Pydantic models for the video generation pipeline."""
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -10,14 +12,14 @@ class Item(BaseModel):
     value: float = Field(description="Numeric value for sorting/comparison (height, rank, score)")
     image_url: str | None = None
     image_path: str | None = None
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Effect(BaseModel):
     """A reusable video effect (scroll, zoom, fade, etc.)."""
 
     name: str
-    params: dict = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class Scene(BaseModel):
@@ -28,7 +30,7 @@ class Scene(BaseModel):
     effects: list[Effect] = Field(default_factory=list)
     duration: float | None = None
     music_path: str | None = None
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Timeline(BaseModel):
@@ -49,7 +51,7 @@ class Target(BaseModel):
     safe_margin_bottom: int = 120
     safe_margin_sides: int = 80
     text_scale: float = 1.0
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Recipe(BaseModel):
@@ -57,10 +59,10 @@ class Recipe(BaseModel):
 
     name: str
     source: str
-    source_config: dict = Field(default_factory=dict)
+    source_config: dict[str, Any] = Field(default_factory=dict)
     target: str
     template: str = "comparison"
     intro_template: str = "default"
     outro_template: str = "default"
     music_query: str | None = None
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)

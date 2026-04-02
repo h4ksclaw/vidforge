@@ -39,3 +39,10 @@ repos:
         language: system
         pass_filenames: false
         stages: [push]
+
+      - id: mypy
+        name: Run mypy type checking
+        entry: uv run mypy src/
+        language: system
+        pass_filenames: false
+        stages: [push]
