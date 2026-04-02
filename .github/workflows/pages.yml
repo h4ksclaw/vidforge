@@ -54,115 +54,565 @@ jobs:
           [ -f site/strip.png ] && HAS_STRIP="true"
           [ -f site/dag.svg ] && HAS_DAG="true"
 
+          # Read SVG content for embedding
+          DAG_SVG=""
+          if [ "$HAS_DAG" = "true" ]; then
+            # Escape for JSON
+            DAG_SVG=$(python3 -c "
+              import json
+              with open('site/dag.svg') as f:
+                  print(json.dumps(f.read()))
+            ")
+          fi
+
           cat > site/index.html << HTMLEOF
           <!DOCTYPE html>
           <html lang="en">
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>VidForge — ${RECIPE_NAME}</title>
+            <title>VidForge — ${RECIPE_NAME} Pipeline DAG</title>
             <style>
               * { margin: 0; padding: 0; box-sizing: border-box; }
               body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                background: #0a0a0f;
-                color: #e0e0e0;
+                background: #0d1117;
+                color: #c9d1d9;
                 min-height: 100vh;
+                display: flex;
+                flex-direction: column;
               }
               header {
-                background: linear-gradient(135deg, #1a1a2e, #16213e);
-                padding: 2rem;
-                border-bottom: 1px solid #2a2a3e;
-                text-align: center;
+                background: linear-gradient(135deg, #161b22, #1a1e2e);
+                padding: 1rem 1.5rem;
+                border-bottom: 1px solid #30363d;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                position: sticky;
+                top: 0;
+                z-index: 100;
               }
-              header h1 { font-size: 1.8rem; color: #fff; margin-bottom: 0.3rem; }
-              header p { color: #888; font-size: 0.9rem; }
-              .timestamp { color: #666; font-size: 0.8rem; margin-top: 0.5rem; }
-              .sections {
-                max-width: 1200px; margin: 2rem auto; padding: 0 1rem;
-                display: flex; flex-direction: column; gap: 2rem;
+              .header-left {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
               }
-              .section {
-                background: #12121a; border: 1px solid #2a2a3e;
-                border-radius: 12px; overflow: hidden;
+              header h1 { font-size: 1.3rem; color: #f0f6fc; }
+              header h1 a { color: inherit; text-decoration: none; }
+              header h1 a:hover { color: #58a6ff; }
+              .header-right {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
               }
-              .section-header {
-                padding: 1rem 1.5rem; background: #1a1a2e;
-                border-bottom: 1px solid #2a2a3e;
-                display: flex; align-items: center; gap: 0.5rem;
+              .btn {
+                background: #21262d;
+                border: 1px solid #30363d;
+                color: #c9d1d9;
+                padding: 0.4rem 0.8rem;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.85rem;
+                transition: all 0.15s;
               }
-              .section-header h2 { font-size: 1.1rem; color: #fff; }
-              .section-body { padding: 1.5rem; }
-              video { width: 100%; max-height: 70vh; border-radius: 8px; background: #000; }
-              .strip-container { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 1rem 0; }
-              .strip-container img { height: 400px; border-radius: 8px; }
-              .dag-container { overflow-x: auto; text-align: center; }
-              .dag-container img { max-width: 100%; border-radius: 8px; }
-              .placeholder { color: #555; font-style: italic; padding: 2rem; text-align: center; }
-              footer { text-align: center; padding: 2rem; color: #444; font-size: 0.8rem; }
-              footer a { color: #666; text-decoration: none; }
+              .btn:hover { background: #30363d; color: #f0f6fc; }
+              .btn.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+              .badge {
+                background: #1f6feb22;
+                border: 1px solid #1f6feb44;
+                color: #58a6ff;
+                padding: 0.2rem 0.6rem;
+                border-radius: 12px;
+                font-size: 0.75rem;
+              }
+
+              /* DAG container */
+              #dag-container {
+                flex: 1;
+                overflow: hidden;
+                cursor: grab;
+                position: relative;
+              }
+              #dag-container:active { cursor: grabbing; }
+          HTMLEOF
+
+          if [ "$HAS_DAG" = "true" ]; then
+            cat >> site/index.html << 'DAGSTYLE'
+              #dag-container svg {
+                position: absolute;
+                top: 0;
+                left: 0;
+              }
+              #dag-container .node-group {
+                cursor: pointer;
+                transition: filter 0.15s;
+              }
+              #dag-container .node-group:hover {
+                filter: brightness(1.3) drop-shadow(0 0 8px rgba(31, 111, 235, 0.5));
+              }
+              #dag-container .node-group:hover path,
+              #dag-container .node-group:hover polygon {
+                stroke: #58a6ff;
+                stroke-width: 2;
+              }
+              #dag-container .node-group text {
+                pointer-events: none;
+              }
+              #dag-container .edge-group {
+                transition: opacity 0.15s;
+              }
+              #dag-container .node-group.dimmed,
+              #dag-container .edge-group.dimmed {
+                opacity: 0.15;
+              }
+              #dag-container .node-group.highlighted path,
+              #dag-container .node-group.highlighted polygon {
+                stroke: #58a6ff;
+                stroke-width: 2.5;
+              }
+              #dag-container .edge-group.highlighted path {
+                stroke: #58a6ff;
+                stroke-width: 2;
+              }
+              #dag-container .cluster-legend,
+              #dag-container .cluster-legend * {
+                pointer-events: none;
+              }
+              #dag-tooltip {
+                display: none;
+                position: fixed;
+                background: #1c2128;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                padding: 0.6rem 0.9rem;
+                font-size: 0.85rem;
+                color: #f0f6fc;
+                pointer-events: none;
+                z-index: 200;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+                max-width: 300px;
+              }
+              #dag-tooltip .fn-name {
+                font-weight: 600;
+                color: #58a6ff;
+                margin-bottom: 0.3rem;
+              }
+              #dag-tooltip .fn-type {
+                font-size: 0.75rem;
+                color: #8b949e;
+                margin-bottom: 0.3rem;
+              }
+              #dag-tooltip .fn-link {
+                font-size: 0.8rem;
+                color: #58a6ff;
+                text-decoration: none;
+              }
+              #dag-tooltip .fn-link:hover { text-decoration: underline; }
+              #zoom-controls {
+                position: absolute;
+                bottom: 1.5rem;
+                right: 1.5rem;
+                display: flex;
+                flex-direction: column;
+                gap: 0.4rem;
+                z-index: 50;
+              }
+              #zoom-controls button {
+                width: 36px;
+                height: 36px;
+                background: #21262d;
+                border: 1px solid #30363d;
+                color: #c9d1d9;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 1.1rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              }
+              #zoom-controls button:hover { background: #30363d; }
+            DAGSTYLE
+          fi
+
+          cat >> site/index.html << 'HTMLEOF2'
+              .empty-state {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex: 1;
+                color: #484f58;
+                font-size: 1.2rem;
+              }
+              .minimap {
+                position: absolute;
+                bottom: 1.5rem;
+                left: 1.5rem;
+                width: 180px;
+                height: 80px;
+                background: #161b22;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                overflow: hidden;
+                z-index: 50;
+                opacity: 0.8;
+              }
+              .minimap:hover { opacity: 1; }
+              .minimap svg { width: 100%; height: 100%; }
+              .minimap .viewport-rect {
+                fill: rgba(31, 111, 235, 0.2);
+                stroke: #58a6ff;
+                stroke-width: 1;
+              }
             </style>
           </head>
           <body>
             <header>
-              <h1>🎬 VidForge — ${RECIPE_NAME}</h1>
-              <p>Generated by GitHub Actions</p>
-              <div class="timestamp" id="timestamp"></div>
-            </header>
-            <div class="sections">
-              <div class="section">
-                <div class="section-header"><h2>📹 Video</h2></div>
-                <div class="section-body">
-          HTMLEOF
-
-          if [ "$HAS_VIDEO" = "true" ]; then
-            cat >> site/index.html << 'VIDEOF'
-                  <video controls preload="metadata">
-                    <source src="scroll.mp4" type="video/mp4">
-                    Your browser does not support video playback.
-                  </video>
-          VIDEOF
-          else
-            echo '                  <p class="placeholder">No video generated</p>' >> site/index.html
-          fi
-
-          cat >> site/index.html << 'HTMLEOF2'
-                </div>
+              <div class="header-left">
+                <h1>🎬 <a href="https://github.com/h4ksclaw/vidforge">VidForge</a> — ${RECIPE_NAME}</h1>
+                <span class="badge" id="node-count"></span>
               </div>
-              <div class="section">
-                <div class="section-header"><h2>🖼️ Character Strip</h2></div>
-                <div class="section-body"><div class="strip-container">
+              <div class="header-right">
+                <button class="btn" id="btn-fit" title="Fit to screen">⊞ Fit</button>
+                <button class="btn" id="btn-reset" title="Reset view">↺ Reset</button>
+                <button class="btn" id="btn-sidebar" title="Toggle info">☰ Info</button>
+              </div>
+            </header>
           HTMLEOF2
 
-          if [ "$HAS_STRIP" = "true" ]; then
-            echo '                    <img src="strip.png" alt="Character height strip">' >> site/index.html
+          if [ "$HAS_DAG" = "true" ]; then
+            cat >> site/index.html << DAGHTML
+            <div id="dag-container">
+              <!-- SVG injected by JS -->
+            </div>
+            <div id="dag-tooltip"></div>
+            <div id="zoom-controls">
+              <button id="zoom-in" title="Zoom in">+</button>
+              <button id="zoom-out" title="Zoom out">−</button>
+              <button id="zoom-fit" title="Fit to screen">⊡</button>
+            </div>
+            DAGHTML
           else
-            echo '                    <p class="placeholder">No strip image</p>' >> site/index.html
+            echo '            <div class="empty-state">No DAG available</div>' >> site/index.html
           fi
 
           cat >> site/index.html << 'HTMLEOF3'
-                </div></div>
-              </div>
-              <div class="section">
-                <div class="section-header"><h2>📊 Pipeline DAG</h2></div>
-                <div class="section-body"><div class="dag-container">
+            <script>
           HTMLEOF3
 
           if [ "$HAS_DAG" = "true" ]; then
-            echo '                    <img src="dag.svg" alt="Pipeline DAG">' >> site/index.html
-          else
-            echo '                    <p class="placeholder">No DAG exported</p>' >> site/index.html
+            # Write the SVG as a JS constant
+            cat >> site/index.html << JSEOF
+              const DAG_SVG = ${DAG_SVG};
+
+              // Pipeline function metadata: name -> { line, type, desc }
+              const FN_META = {
+                skip_bg_removal: { line: null, type: "config", desc: "Skip background removal flag" },
+                load_recipe: { line: 20, type: "source", desc: "Load recipe YAML configuration" },
+                load_characters: { line: 28, type: "source", desc: "Load character list from recipe" },
+                build_items: { line: 42, type: "transform", desc: "Convert raw character dicts to Item models" },
+                build_target: { line: 51, type: "transform", desc: "Build Target from recipe (youtube/tiktok/reels)" },
+                fetch_images: { line: 64, type: "fetch", desc: "Find best images via Fandom API" },
+                process_images: { line: 87, type: "process", desc: "Download images, remove backgrounds, apply quality filters" },
+                sorted_items: { line: 102, type: "transform", desc: "Sort items by value (height) ascending" },
+                render_strip: { line: 110, type: "render", desc: "Build the wide character strip image" },
+                render_video: { line: 294, type: "render", desc: "Render scrolling video from strip using ffmpeg" },
+                run_pipeline: { line: 353, type: "orchestrator", desc: "Run the Hamilton DAG pipeline" },
+              };
+
+              const GITHUB_BASE = "https://github.com/h4ksclaw/vidforge/blob/main/src/vidforge/pipeline.py";
+
+              // Initialize DAG viewer
+              (function() {
+                const container = document.getElementById('dag-container');
+                const tooltip = document.getElementById('dag-tooltip');
+                const svgEl = new DOMParser().parseFromString(DAG_SVG, 'image/svg+xml').documentElement;
+
+                // Set SVG background transparent, fix colors
+                svgEl.style.background = 'transparent';
+                svgEl.querySelectorAll('polygon[fill="white"]').forEach(p => {
+                  p.setAttribute('fill', 'transparent');
+                });
+                svgEl.querySelectorAll('path[fill="white"]').forEach(p => {
+                  if (p.getAttribute('fill') === 'white') p.setAttribute('fill', 'transparent');
+                });
+                // Fix edge arrows and lines to be visible on dark bg
+                svgEl.querySelectorAll('polygon[fill="black"]').forEach(p => {
+                  p.setAttribute('fill', '#8b949e');
+                });
+                svgEl.querySelectorAll('path[stroke="black"]').forEach(p => {
+                  p.setAttribute('stroke', '#8b949e');
+                });
+                // Fix node borders
+                svgEl.querySelectorAll('g.node path[stroke="black"], g.node polygon[stroke="black"]').forEach(p => {
+                  p.setAttribute('stroke', '#484f58');
+                });
+                // Fix text colors
+                svgEl.querySelectorAll('g.node text[fill="black"]').forEach(t => {
+                  t.setAttribute('fill', '#c9d1d9');
+                });
+                // Fix legend text
+                svgEl.querySelectorAll('text[fill="black"]').forEach(t => {
+                  t.setAttribute('fill', '#8b949e');
+                });
+                // Color code nodes by type
+                const typeColors = {
+                  config: '#da3633',
+                  source: '#1f6feb',
+                  fetch: '#a371f7',
+                  process: '#f0883e',
+                  transform: '#3fb950',
+                  render: '#58a6ff',
+                  orchestrator: '#f778ba',
+                };
+                // Dim internal Hamilton nodes
+                const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pipeline_inputs', 'input', 'function'];
+
+                container.appendChild(svgEl);
+
+                // Wrap each node group
+                const nodeGroups = {};
+                const edgeGroups = {};
+                let nodeCount = 0;
+
+                svgEl.querySelectorAll('g.node').forEach(g => {
+                  const title = g.querySelector('title');
+                  if (!title) return;
+                  const name = title.textContent.trim();
+
+                  // Create wrapper
+                  const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                  wrapper.classList.add('node-group');
+                  wrapper.dataset.name = name;
+                  g.parentNode.insertBefore(wrapper, g);
+                  wrapper.appendChild(g);
+
+                  nodeGroups[name] = wrapper;
+
+                  if (internalNodes.includes(name)) {
+                    wrapper.classList.add('internal');
+                    wrapper.style.opacity = '0.3';
+                  } else {
+                    nodeCount++;
+                    // Apply type color
+                    const meta = FN_META[name];
+                    if (meta) {
+                      const color = typeColors[meta.type] || '#58a6ff';
+                      const path = g.querySelector('path');
+                      const polygon = g.querySelector('polygon');
+                      if (path && path.getAttribute('fill') !== 'transparent') {
+                        path.setAttribute('fill', color + '33');
+                      }
+                      if (polygon && polygon.getAttribute('fill') !== 'transparent') {
+                        polygon.setAttribute('fill', color + '22');
+                      }
+                    }
+                  }
+
+                  // Click handler
+                  wrapper.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const meta = FN_META[name];
+                    if (meta && meta.line) {
+                      window.open(GITHUB_BASE + '#L' + meta.line, '_blank');
+                    }
+                  });
+
+                  // Hover handler
+                  wrapper.addEventListener('mouseenter', (e) => {
+                    if (internalNodes.includes(name)) return;
+                    const meta = FN_META[name];
+                    if (!meta) return;
+                    tooltip.innerHTML = `
+                      <div class="fn-name">${name}</div>
+                      <div class="fn-type">${meta.type}</div>
+                      <div style="margin-bottom:0.3rem">${meta.desc}</div>
+                      ${meta.line ? '<a class="fn-link" href="' + GITHUB_BASE + '#L' + meta.line + '" target="_blank">→ View source (line ' + meta.line + ')</a>' : ''}
+                    `;
+                    tooltip.style.display = 'block';
+                    highlightNode(name);
+                  });
+                  wrapper.addEventListener('mousemove', (e) => {
+                    tooltip.style.left = (e.clientX + 12) + 'px';
+                    tooltip.style.top = (e.clientY + 12) + 'px';
+                  });
+                  wrapper.addEventListener('mouseleave', () => {
+                    tooltip.style.display = 'none';
+                    clearHighlight();
+                  });
+                });
+
+                document.getElementById('node-count').textContent = nodeCount + ' nodes';
+
+                // Wrap edges
+                svgEl.querySelectorAll('g.edge').forEach(g => {
+                  const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                  wrapper.classList.add('edge-group');
+                  g.parentNode.insertBefore(wrapper, g);
+                  wrapper.appendChild(g);
+                  edgeGroups[wrapper.querySelector('title')?.textContent?.trim()] = wrapper;
+                });
+
+                // Highlight connected nodes/edges
+                function highlightNode(name) {
+                  svgEl.querySelectorAll('.node-group:not(.internal)').forEach(g => g.classList.add('dimmed'));
+                  svgEl.querySelectorAll('.edge-group').forEach(g => g.classList.add('dimmed'));
+                  if (nodeGroups[name]) {
+                    nodeGroups[name].classList.remove('dimmed');
+                    nodeGroups[name].classList.add('highlighted');
+                  }
+                  // Find connected edges
+                  svgEl.querySelectorAll('g.edge title').forEach(t => {
+                    const edgeName = t.textContent.trim();
+                    if (edgeName.includes(name)) {
+                      const wrapper = t.closest('.edge-group');
+                      if (wrapper) {
+                        wrapper.classList.remove('dimmed');
+                        wrapper.classList.add('highlighted');
+                      }
+                    }
+                  });
+                }
+                function clearHighlight() {
+                  svgEl.querySelectorAll('.dimmed').forEach(e => e.classList.remove('dimmed'));
+                  svgEl.querySelectorAll('.highlighted').forEach(e => e.classList.remove('highlighted'));
+                }
+
+                // Pan and zoom
+                let scale = 1, tx = 0, ty = 0;
+                let isPanning = false, startX, startY;
+
+                function applyTransform() {
+                  svgEl.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+                  svgEl.style.transformOrigin = '0 0';
+                }
+
+                container.addEventListener('mousedown', (e) => {
+                  if (e.target.closest('.node-group')) return;
+                  isPanning = true;
+                  startX = e.clientX - tx;
+                  startY = e.clientY - ty;
+                });
+                window.addEventListener('mousemove', (e) => {
+                  if (!isPanning) return;
+                  tx = e.clientX - startX;
+                  ty = e.clientY - startY;
+                  applyTransform();
+                });
+                window.addEventListener('mouseup', () => { isPanning = false; });
+
+                container.addEventListener('wheel', (e) => {
+                  e.preventDefault();
+                  const rect = container.getBoundingClientRect();
+                  const mx = e.clientX - rect.left;
+                  const my = e.clientY - rect.top;
+                  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                  const newScale = Math.max(0.1, Math.min(5, scale * delta));
+                  // Zoom toward mouse
+                  tx = mx - (mx - tx) * (newScale / scale);
+                  ty = my - (my - ty) * (newScale / scale);
+                  scale = newScale;
+                  applyTransform();
+                }, { passive: false });
+
+                // Touch support
+                let lastTouchDist = 0, lastTouchX = 0, lastTouchY = 0;
+                container.addEventListener('touchstart', (e) => {
+                  if (e.touches.length === 1) {
+                    isPanning = true;
+                    startX = e.touches[0].clientX - tx;
+                    startY = e.touches[0].clientY - ty;
+                  } else if (e.touches.length === 2) {
+                    isPanning = false;
+                    lastTouchDist = Math.hypot(
+                      e.touches[1].clientX - e.touches[0].clientX,
+                      e.touches[1].clientY - e.touches[0].clientY
+                    );
+                    lastTouchX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    lastTouchY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                  }
+                }, { passive: true });
+                container.addEventListener('touchmove', (e) => {
+                  if (e.touches.length === 1 && isPanning) {
+                    tx = e.touches[0].clientX - startX;
+                    ty = e.touches[0].clientY - startY;
+                    applyTransform();
+                  } else if (e.touches.length === 2) {
+                    const dist = Math.hypot(
+                      e.touches[1].clientX - e.touches[0].clientX,
+                      e.touches[1].clientY - e.touches[0].clientY
+                    );
+                    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    const delta = dist / lastTouchDist;
+                    const newScale = Math.max(0.1, Math.min(5, scale * delta));
+                    tx = midX - (midX - tx) * (newScale / scale);
+                    ty = midY - (midY - ty) * (newScale / scale);
+                    scale = newScale;
+                    applyTransform();
+                    lastTouchDist = dist;
+                    lastTouchX = midX;
+                    lastTouchY = midY;
+                  }
+                }, { passive: true });
+                container.addEventListener('touchend', () => { isPanning = false; });
+
+                // Fit to screen
+                function fitToScreen() {
+                  const svgW = svgEl.viewBox?.baseVal?.width || svgEl.getBBox().width;
+                  const svgH = svgEl.viewBox?.baseVal?.height || svgEl.getBBox().height;
+                  const cw = container.clientWidth;
+                  const ch = container.clientHeight;
+                  scale = Math.min(cw / svgW, ch / svgH) * 0.9;
+                  tx = (cw - svgW * scale) / 2;
+                  ty = (ch - svgH * scale) / 2;
+                  applyTransform();
+                }
+
+                function resetView() {
+                  scale = 1; tx = 0; ty = 0;
+                  applyTransform();
+                }
+
+                document.getElementById('btn-fit').addEventListener('click', fitToScreen);
+                document.getElementById('btn-reset').addEventListener('click', resetView);
+                document.getElementById('zoom-in').addEventListener('click', () => {
+                  const cw = container.clientWidth / 2;
+                  const ch = container.clientHeight / 2;
+                  const newScale = Math.min(5, scale * 1.3);
+                  tx = cw - (cw - tx) * (newScale / scale);
+                  ty = ch - (ch - ty) * (newScale / scale);
+                  scale = newScale;
+                  applyTransform();
+                });
+                document.getElementById('zoom-out').addEventListener('click', () => {
+                  const cw = container.clientWidth / 2;
+                  const ch = container.clientHeight / 2;
+                  const newScale = Math.max(0.1, scale * 0.7);
+                  tx = cw - (cw - tx) * (newScale / scale);
+                  ty = ch - (ch - ty) * (newScale / scale);
+                  scale = newScale;
+                  applyTransform();
+                });
+                document.getElementById('zoom-fit').addEventListener('click', fitToScreen);
+
+                // Initial fit
+                setTimeout(fitToScreen, 100);
+                window.addEventListener('resize', () => setTimeout(fitToScreen, 100));
+
+                // Keyboard shortcuts
+                window.addEventListener('keydown', (e) => {
+                  if (e.key === '+' || e.key === '=') document.getElementById('zoom-in').click();
+                  if (e.key === '-') document.getElementById('zoom-out').click();
+                  if (e.key === '0') fitToScreen();
+                });
+              })();
+            JSEOF
           fi
 
           cat >> site/index.html << 'HTMLEOF4'
-                </div></div>
-              </div>
-            </div>
-            <footer>
-              <p>Built with <a href="https://github.com/h4ksclaw/vidforge">vidforge</a> • Powered by GitHub Actions</p>
-            </footer>
-            <script>
-              document.getElementById('timestamp').textContent = new Date().toLocaleString();
             </script>
           </body>
           </html>
