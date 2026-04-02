@@ -32,3 +32,10 @@ repos:
         entry: bash -c 'if grep -rn "from \.\." src/ --include="*.py" | grep -v "^[^:]*:[[:space:]]*#"; then echo "❌ Found relative imports — use absolute imports (from vidforge.xxx)"; exit 1; fi'
         language: system
         pass_filenames: false
+
+      - id: pytest-coverage
+        name: Run tests with coverage (>=80%)
+        entry: uv run pytest --cov --cov-fail-under=80 -q
+        language: system
+        pass_filenames: false
+        stages: [push]
