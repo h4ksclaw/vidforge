@@ -309,9 +309,9 @@ def render_video(
     pause_frames = fps
 
     crop_expr = (
-        f"x='if(lt(n\\,{pause_frames})\\,0\\,"
-        f"if(gt(n\\,{total_frames - pause_frames})\\,{scroll_total}\\,"
-        f"min((n-{pause_frames})*{px_per_frame}\\,{scroll_total})))'"
+        f"x='if(lt(n,{pause_frames}),0,"
+        f"if(gt(n,{total_frames - pause_frames}),{scroll_total},"
+        f"min((n-{pause_frames})*{px_per_frame},{scroll_total})))'"
     )
 
     video_path = Path("output") / "scroll.mp4"
@@ -319,6 +319,8 @@ def render_video(
     cmd = [
         "ffmpeg",
         "-y",
+        "-loop",
+        "1",
         "-i",
         str(strip_path),
         "-vf",
