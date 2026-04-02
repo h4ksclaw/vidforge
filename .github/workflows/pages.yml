@@ -43,7 +43,8 @@ jobs:
 
           RECIPE_NAME="VidForge"
           if [ -f site/recipe.txt ]; then
-            RECIPE_NAME=$(head -1 site/recipe.txt | xargs basename .yaml)
+            RAW=$(head -1 site/recipe.txt)
+            RECIPE_NAME=$(basename "$RAW" .yaml)
           fi
 
           HAS_VIDEO="false"
