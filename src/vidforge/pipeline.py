@@ -1,6 +1,7 @@
 """Hamilton DAG pipeline for anime height comparison videos."""
 
 import importlib
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -8,12 +9,14 @@ from typing import Any
 import numpy as np
 import yaml
 from hamilton import driver
+from hamilton.execution.executors import MultiThreadingExecutor
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFilter
 from PIL import ImageFont
 
 from vidforge.assets.images import fetch_and_process_image
+from vidforge.assets.music import fetch_music
 from vidforge.models import Item
 from vidforge.models import Recipe
 from vidforge.models import Target
@@ -61,6 +64,19 @@ def build_target(load_recipe: Recipe) -> Target:
         "reels": Target(name="reels", width=1080, height=1920),
     }
     return targets.get(load_recipe.target, targets["youtube"])
+
+
+# ─── Music fetching (parallel with image chain) ─────────────────────────────
+
+
+def fetch_music_pipeline(load_recipe: Recipe) -> Path | None:
+    """Fetch background music from YouTube based on recipe music_query.
+
+    Runs in parallel with the image fetching chain — only depends on load_recipe.
+    """
+    if not load_recipe.music_query:
+        return None
+    return fetch_music(load_recipe.music_query)
 
 
 # ─── Image fetching ──────────────────────────────────────────────────────────
@@ -299,6 +315,7 @@ def render_strip(
 def render_video(
     render_strip: tuple[Path, float],
     build_target: Target,
+    fetch_music_pipeline: Path | None = None,
 ) -> Path:
     """Render scrolling video from strip using ffmpeg crop filter."""
     strip_path, duration = render_strip
@@ -328,22 +345,44 @@ def render_video(
         "1",
         "-i",
         str(strip_path),
-        "-vf",
-        f"crop={width}:{height}:{crop_expr}",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "fast",
-        "-crf",
-        "20",
-        "-pix_fmt",
-        "yuv420p",
-        "-r",
-        str(fps),
-        "-t",
-        str(duration),
-        str(video_path),
     ]
+
+    # Add music input if available
+    if fetch_music_pipeline and fetch_music_pipeline.exists():
+        cmd.extend(["-i", str(fetch_music_pipeline)])
+
+    cmd.extend(
+        [
+            "-vf",
+            f"crop={width}:{height}:{crop_expr}",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-r",
+            str(fps),
+            "-t",
+            str(duration),
+        ]
+    )
+
+    # Add audio encoding if music is present
+    if fetch_music_pipeline and fetch_music_pipeline.exists():
+        cmd.extend(
+            [
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-shortest",
+            ]
+        )
+
+    cmd.append(str(video_path))
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if result.returncode != 0:
@@ -360,13 +399,17 @@ def run_pipeline(
     skip_bg_removal: bool = False,
     export_dag: str | None = None,
 ) -> Path:
-    """Run the Hamilton DAG pipeline."""
+    """Run the Hamilton DAG pipeline with parallel execution."""
     this_module = importlib.import_module("vidforge.pipeline")
+
+    # Use threading executor for I/O-bound parallelism (image fetching + music)
+    max_workers = int(os.environ.get("VIDFORGE_WORKERS", 4))
 
     dr = (
         driver.Builder()
         .with_config({"skip_bg_removal": skip_bg_removal})
         .with_modules(this_module)
+        .with_local_executor(MultiThreadingExecutor(max_tasks=max_workers))
         .build()
     )
 
