@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class Item(BaseModel):
     """A single data item (character, fact, ranking entry, etc.)."""
+
     name: str
     value: float = Field(description="Numeric value for sorting/comparison (height, rank, score)")
     image_url: str | None = None
@@ -14,12 +15,14 @@ class Item(BaseModel):
 
 class Effect(BaseModel):
     """A reusable video effect (scroll, zoom, fade, etc.)."""
+
     name: str
     params: dict = Field(default_factory=dict)
 
 
 class Scene(BaseModel):
     """A single scene in the timeline."""
+
     template: str
     items: list[Item] = Field(default_factory=list)
     effects: list[Effect] = Field(default_factory=list)
@@ -30,11 +33,13 @@ class Scene(BaseModel):
 
 class Timeline(BaseModel):
     """Ordered sequence of scenes."""
+
     scenes: list[Scene] = Field(default_factory=list)
 
 
 class Target(BaseModel):
     """Platform output configuration."""
+
     name: str
     width: int
     height: int
@@ -49,6 +54,7 @@ class Target(BaseModel):
 
 class Recipe(BaseModel):
     """Video generation recipe."""
+
     name: str
     source: str
     source_config: dict = Field(default_factory=dict)

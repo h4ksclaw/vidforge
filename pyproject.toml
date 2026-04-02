@@ -27,6 +27,7 @@ dependencies = [
 all = [
     "vidforge[youtube]",
     "vidforge[dev]",
+    "vidforge[music]",
 ]
 youtube = [
     "google-api-python-client>=2.100",
@@ -39,7 +40,8 @@ music = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "ruff>=0.1",
+    "ruff>=0.15",
+    "pre-commit>=4.0",
 ]
 
 [project.scripts]
@@ -49,8 +51,36 @@ vidforge = "vidforge.cli:app"
 where = ["src"]
 
 [tool.ruff]
-line-length = 100
 target-version = "py311"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # typer.Argument/Option in defaults (standard Typer pattern)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["vidforge"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint.flake8-import-conventions]
+banned-from = ["*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"

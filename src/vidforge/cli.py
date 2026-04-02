@@ -1,7 +1,6 @@
 """VidForge CLI."""
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -18,9 +17,9 @@ console = Console()
 def generate(
     recipe: Path = typer.Argument(..., help="Path to recipe YAML file"),
     target: str = typer.Option("youtube", help="Platform target"),
-    output: Optional[Path] = typer.Option(None, help="Output file path"),
+    output: Path | None = typer.Option(None, help="Output file path"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show DAG without running"),
-    export_dag: Optional[Path] = typer.Option(None, "--export-dag", help="Export DAG to file"),
+    export_dag: Path | None = typer.Option(None, "--export-dag", help="Export DAG to file"),
 ) -> None:
     """Generate a video from a recipe."""
     console.print(f"[bold]Generating video from:[/] {recipe}")
@@ -44,7 +43,7 @@ def generate(
 def upload(
     video: Path = typer.Argument(..., help="Path to video file"),
     platform: str = typer.Option("youtube", help="Target platform"),
-    title: Optional[str] = typer.Option(None, help="Video title"),
+    title: str | None = typer.Option(None, help="Video title"),
 ) -> None:
     """Upload a video to a platform."""
     console.print(f"[bold]Uploading to {platform}:[/] {video}")

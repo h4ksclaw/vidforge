@@ -1,0 +1,34 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.8
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: no-commit-to-branch
+        args: [--branch, main]
+        stages: [push]
+
+  - repo: local
+    hooks:
+      - id: no-scoped-imports
+        name: No scoped imports (must be at top of file)
+        entry: bash -c 'if grep -rn "^[[:space:]].*\bimport\b" src/ --include="*.py" | grep -v "^[^:]*:[[:space:]]*#"; then echo "❌ Found scoped imports — all imports must be at top of file"; exit 1; fi'
+        language: system
+        pass_filenames: false
+
+      - id: no-relative-imports
+        name: No relative imports in src/
+        entry: bash -c 'if grep -rn "from \.\." src/ --include="*.py" | grep -v "^[^:]*:[[:space:]]*#"; then echo "❌ Found relative imports — use absolute imports (from vidforge.xxx)"; exit 1; fi'
+        language: system
+        pass_filenames: false

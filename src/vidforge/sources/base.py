@@ -1,7 +1,6 @@
 """Data source base class."""
 
 from abc import ABC, abstractmethod
-from pathlib import Path
 
 from vidforge.models import Item
 
