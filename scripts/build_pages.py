@@ -1,24 +1,102 @@
-"""Build the GitHub Pages site from pipeline output."""
+"""Build the GitHub Pages site from pipeline output.
 
+Auto-introspects vidforge.pipeline to extract function metadata
+(line numbers, return types, docstrings, dependencies) — no manual
+mapping needed. Add a new Hamilton function and it just works.
+"""
+
+import inspect
 import json
+import shutil
 import sys
 from pathlib import Path
 
+# Pipeline module metadata — auto-extracted
+FN_META: dict = {}
 
-def build_site(output_dir: Path, site_dir: Path, recipe_name: str = "VidForge"):
+
+def extract_pipeline_metadata(repo_root: Path | None = None):
+    """Introspect vidforge.pipeline to get function metadata automatically."""
+    global FN_META
+
+    # Try importing from the installed package
+    try:
+        import vidforge.pipeline as mod
+    except ImportError:
+        # Fallback: add src to path
+        src = (repo_root or Path.cwd()) / "src"
+        if src.exists():
+            sys.path.insert(0, str(src))
+        import vidforge.pipeline as mod  # type: ignore
+
+    for name, fn in inspect.getmembers(mod, inspect.isfunction):
+        if fn.__module__ != "vidforge.pipeline" or name.startswith("_"):
+            continue
+
+        try:
+            lines = inspect.getsourcelines(fn)
+            line_no = lines[1]
+        except (OSError, TypeError):
+            line_no = None
+
+        sig = inspect.signature(fn)
+        ret = sig.return_annotation
+        if ret is inspect.Parameter.empty:
+            ret_type = "Any"
+        else:
+            ret_type = getattr(ret, "__name__", str(ret).replace("typing.", ""))
+
+        doc = inspect.getdoc(fn) or ""
+        # Extract dependencies from params (exclude config params)
+        config_params = {"skip_bg_removal"}
+        deps = [p for p in sig.parameters if p not in config_params]
+
+        # Classify function type based on name conventions
+        if name.startswith("load_"):
+            fn_type = "source"
+        elif name.startswith("fetch_"):
+            fn_type = "fetch"
+        elif name.startswith("process_"):
+            fn_type = "process"
+        elif name.startswith("render_"):
+            fn_type = "render"
+        elif name.startswith("build_") or name.startswith("sorted_"):
+            fn_type = "transform"
+        elif name.startswith("run_"):
+            fn_type = "orchestrator"
+        else:
+            fn_type = "transform"
+
+        FN_META[name] = {
+            "line": line_no,
+            "type": fn_type,
+            "return_type": ret_type,
+            "deps": deps,
+            "desc": doc.split("\n")[0] if doc else "",
+        }
+
+
+def build_site(
+    output_dir: Path,
+    site_dir: Path,
+    recipe_name: str = "VidForge",
+    repo_root: Path | None = None,
+):
     """Generate the interactive DAG viewer HTML page."""
+    extract_pipeline_metadata(repo_root)
+
     site_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy output files
     for f in output_dir.iterdir():
         if f.is_file():
-            import shutil
             shutil.copy2(f, site_dir / f.name)
 
     # Read recipe name
     recipe_file = output_dir / "recipe.txt"
     if recipe_file.exists():
-        recipe_name = recipe_file.read_text().strip().split("/")[-1].replace(".yaml", "")
+        raw = recipe_file.read_text().strip()
+        recipe_name = raw.split("/")[-1].replace(".yaml", "")
 
     # Read DAG SVG if present
     dag_svg = ""
@@ -26,25 +104,7 @@ def build_site(output_dir: Path, site_dir: Path, recipe_name: str = "VidForge"):
     if dag_file.exists():
         dag_svg = json.dumps(dag_file.read_text())
 
-    has_video = (site_dir / "scroll.mp4").exists()
-    has_strip = (site_dir / "strip.png").exists()
-    has_dag = bool(dag_svg)
-
-    # Pipeline function metadata
-    fn_meta = {
-        "skip_bg_removal": {"line": None, "type": "config", "desc": "Skip background removal flag"},
-        "load_recipe": {"line": 20, "type": "source", "desc": "Load recipe YAML configuration"},
-        "load_characters": {"line": 28, "type": "source", "desc": "Load character list from recipe"},
-        "build_items": {"line": 42, "type": "transform", "desc": "Convert raw character dicts to Item models"},
-        "build_target": {"line": 51, "type": "transform", "desc": "Build Target from recipe (youtube/tiktok/reels)"},
-        "fetch_images": {"line": 64, "type": "fetch", "desc": "Find best images via Fandom API"},
-        "process_images": {"line": 87, "type": "process", "desc": "Download images, remove backgrounds, apply quality filters"},
-        "sorted_items": {"line": 102, "type": "transform", "desc": "Sort items by value (height) ascending"},
-        "render_strip": {"line": 110, "type": "render", "desc": "Build the wide character strip image"},
-        "render_video": {"line": 294, "type": "render", "desc": "Render scrolling video from strip using ffmpeg"},
-        "run_pipeline": {"line": 353, "type": "orchestrator", "desc": "Run the Hamilton DAG pipeline"},
-    }
-    fn_meta_json = json.dumps(fn_meta)
+    fn_meta_json = json.dumps(FN_META)
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -79,9 +139,7 @@ header h1 a:hover {{ color: #58a6ff; }}
   padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
 }}
 .btn:hover {{ background: #30363d; color: #f0f6fc; }}
-#dag-container {{
-  flex: 1; overflow: hidden; cursor: grab; position: relative;
-}}
+#dag-container {{ flex: 1; overflow: hidden; cursor: grab; position: relative; }}
 #dag-container:active {{ cursor: grabbing; }}
 #dag-container svg {{ position: absolute; top: 0; left: 0; }}
 #dag-container .node-group {{ cursor: pointer; transition: filter 0.15s; }}
@@ -101,10 +159,16 @@ header h1 a:hover {{ color: #58a6ff; }}
   border: 1px solid #30363d; border-radius: 8px;
   padding: 0.6rem 0.9rem; font-size: 0.85rem; color: #f0f6fc;
   pointer-events: none; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  max-width: 300px;
+  max-width: 350px;
 }}
 #dag-tooltip .fn-name {{ font-weight: 600; color: #58a6ff; margin-bottom: 0.3rem; }}
-#dag-tooltip .fn-type {{ font-size: 0.75rem; color: #8b949e; margin-bottom: 0.3rem; }}
+#dag-tooltip .fn-type {{
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 0.1rem 0.4rem; border-radius: 4px; display: inline-block; margin-bottom: 0.3rem;
+}}
+#dag-tooltip .fn-ret {{ font-size: 0.75rem; color: #8b949e; margin-bottom: 0.2rem; }}
+#dag-tooltip .fn-desc {{ font-size: 0.8rem; color: #c9d1d9; margin-bottom: 0.3rem; }}
+#dag-tooltip .fn-deps {{ font-size: 0.75rem; color: #8b949e; margin-bottom: 0.3rem; }}
 #dag-tooltip .fn-link {{ font-size: 0.8rem; color: #58a6ff; text-decoration: none; }}
 #zoom-controls {{
   position: absolute; bottom: 1.5rem; right: 1.5rem;
@@ -137,16 +201,22 @@ header h1 a:hover {{ color: #58a6ff; }}
   <button id="zoom-fit">\u2297</button>
 </div>
 <script>
-const DAG_SVG = {dag_svg if dag_svg else 'null'};
+const DAG_SVG = {dag_svg if dag_svg else "null"};
 const FN_META = {fn_meta_json};
 const GITHUB_BASE = "https://github.com/h4ksclaw/vidforge/blob/main/src/vidforge/pipeline.py";
+const typeColors = {{ config: '#da3633', source: '#1f6feb', fetch: '#a371f7', process: '#f0883e', transform: '#3fb950', render: '#58a6ff', orchestrator: '#f778ba' }};
+const typeBg = {{ config: '#da363322', source: '#1f6feb22', fetch: '#a371f722', process: '#f0883e22', transform: '#3fb95022', render: '#58a6ff22', orchestrator: '#f778ba22' }};
+const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pipeline_inputs', 'input', 'function'];
+
 (function() {{
   const container = document.getElementById('dag-container');
   const tooltip = document.getElementById('dag-tooltip');
+
   if (!DAG_SVG) {{
     container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#484f58;font-size:1.2rem">No DAG available</div>';
     return;
   }}
+
   const svgEl = new DOMParser().parseFromString(DAG_SVG, 'image/svg+xml').documentElement;
   svgEl.style.background = 'transparent';
   svgEl.querySelectorAll('polygon[fill="white"]').forEach(p => p.setAttribute('fill', 'transparent'));
@@ -155,11 +225,11 @@ const GITHUB_BASE = "https://github.com/h4ksclaw/vidforge/blob/main/src/vidforge
   svgEl.querySelectorAll('g.node path[stroke="black"], g.node polygon[stroke="black"]').forEach(p => p.setAttribute('stroke', '#484f58'));
   svgEl.querySelectorAll('g.node text[fill="black"]').forEach(t => t.setAttribute('fill', '#c9d1d9'));
   svgEl.querySelectorAll('text[fill="black"]').forEach(t => t.setAttribute('fill', '#8b949e'));
-  const typeColors = {{ config: '#da3633', source: '#1f6feb', fetch: '#a371f7', process: '#f0883e', transform: '#3fb950', render: '#58a6ff', orchestrator: '#f778ba' }};
-  const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pipeline_inputs', 'input', 'function'];
+
   container.appendChild(svgEl);
   const nodeGroups = {{}};
   let nodeCount = 0;
+
   svgEl.querySelectorAll('g.node').forEach(g => {{
     const title = g.querySelector('title');
     if (!title) return;
@@ -170,29 +240,44 @@ const GITHUB_BASE = "https://github.com/h4ksclaw/vidforge/blob/main/src/vidforge
     g.parentNode.insertBefore(wrapper, g);
     wrapper.appendChild(g);
     nodeGroups[name] = wrapper;
-    if (internalNodes.includes(name)) {{ wrapper.style.opacity = '0.3'; }}
-    else {{
+
+    if (internalNodes.includes(name)) {{
+      wrapper.style.opacity = '0.3';
+    }} else {{
       nodeCount++;
       const meta = FN_META[name];
       if (meta) {{
         const color = typeColors[meta.type] || '#58a6ff';
+        const bg = typeBg[meta.type] || '#58a6ff22';
         const path = g.querySelector('path');
         const polygon = g.querySelector('polygon');
-        if (path && path.getAttribute('fill') !== 'transparent') path.setAttribute('fill', color + '33');
-        if (polygon && polygon.getAttribute('fill') !== 'transparent') polygon.setAttribute('fill', color + '22');
+        if (path && path.getAttribute('fill') !== 'transparent') path.setAttribute('fill', bg);
+        if (polygon && polygon.getAttribute('fill') !== 'transparent') polygon.setAttribute('fill', bg);
       }}
     }}
+
     wrapper.addEventListener('click', (e) => {{
       e.stopPropagation();
       const meta = FN_META[name];
       if (meta && meta.line) window.open(GITHUB_BASE + '#L' + meta.line, '_blank');
     }});
+
     wrapper.addEventListener('mouseenter', () => {{
       if (internalNodes.includes(name)) return;
       const meta = FN_META[name];
       if (!meta) return;
-      tooltip.innerHTML = '<div class="fn-name">' + name + '</div><div class="fn-type">' + meta.type + '</div><div style="margin-bottom:0.3rem">' + meta.desc + '</div>' + (meta.line ? '<a class="fn-link" href="' + GITHUB_BASE + '#L' + meta.line + '" target="_blank">\u2192 View source (line ' + meta.line + ')</a>' : '');
+
+      const typeColor = typeColors[meta.type] || '#58a6ff';
+      const typeBg2 = typeBg[meta.type] || '#58a6ff22';
+      let html = '<div class="fn-name">' + name + '</div>';
+      html += '<span class="fn-type" style="background:' + typeBg2 + ';color:' + typeColor + '">' + meta.type + '</span>';
+      if (meta.return_type) html += '<div class="fn-ret">\u2192 ' + meta.return_type + '</div>';
+      if (meta.desc) html += '<div class="fn-desc">' + meta.desc + '</div>';
+      if (meta.deps && meta.deps.length) html += '<div class="fn-deps">\u2b05 ' + meta.deps.join(', ') + '</div>';
+      if (meta.line) html += '<a class="fn-link" href="' + GITHUB_BASE + '#L' + meta.line + '" target="_blank">\u2192 View source (line ' + meta.line + ')</a>';
+      tooltip.innerHTML = html;
       tooltip.style.display = 'block';
+
       svgEl.querySelectorAll('.node-group').forEach(g => g.classList.add('dimmed'));
       svgEl.querySelectorAll('.edge-group').forEach(g => g.classList.add('dimmed'));
       if (nodeGroups[name]) {{ nodeGroups[name].classList.remove('dimmed'); nodeGroups[name].classList.add('highlighted'); }}
@@ -203,20 +288,28 @@ const GITHUB_BASE = "https://github.com/h4ksclaw/vidforge/blob/main/src/vidforge
         }}
       }});
     }});
-    wrapper.addEventListener('mousemove', (e) => {{ tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY + 12) + 'px'; }});
+
+    wrapper.addEventListener('mousemove', (e) => {{
+      tooltip.style.left = (e.clientX + 12) + 'px';
+      tooltip.style.top = (e.clientY + 12) + 'px';
+    }});
+
     wrapper.addEventListener('mouseleave', () => {{
       tooltip.style.display = 'none';
       svgEl.querySelectorAll('.dimmed').forEach(e => e.classList.remove('dimmed'));
       svgEl.querySelectorAll('.highlighted').forEach(e => e.classList.remove('highlighted'));
     }});
   }});
+
   document.getElementById('node-count').textContent = nodeCount + ' nodes';
+
   svgEl.querySelectorAll('g.edge').forEach(g => {{
     const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     wrapper.classList.add('edge-group');
     g.parentNode.insertBefore(wrapper, g);
     wrapper.appendChild(g);
   }});
+
   let scale = 1, tx = 0, ty = 0, isPanning = false, startX, startY;
   function applyTransform() {{ svgEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; svgEl.style.transformOrigin = '0 0'; }}
   container.addEventListener('mousedown', (e) => {{ if (e.target.closest('.node-group')) return; isPanning = true; startX = e.clientX - tx; startY = e.clientY - ty; }});
@@ -231,6 +324,7 @@ const GITHUB_BASE = "https://github.com/h4ksclaw/vidforge/blob/main/src/vidforge
     tx = mx - (mx - tx) * (ns / scale); ty = my - (my - ty) * (ns / scale); scale = ns;
     applyTransform();
   }}, {{ passive: false }});
+
   function fitToScreen() {{
     const svgW = svgEl.viewBox?.baseVal?.width || svgEl.getBBox().width;
     const svgH = svgEl.viewBox?.baseVal?.height || svgEl.getBBox().height;
@@ -239,6 +333,7 @@ const GITHUB_BASE = "https://github.com/h4ksclaw/vidforge/blob/main/src/vidforge
     tx = (cw - svgW * scale) / 2; ty = (ch - svgH * scale) / 2;
     applyTransform();
   }}
+
   document.getElementById('btn-fit').addEventListener('click', fitToScreen);
   document.getElementById('btn-reset').addEventListener('click', () => {{ scale = 1; tx = 0; ty = 0; applyTransform(); }});
   document.getElementById('zoom-in').addEventListener('click', () => {{ const cw = container.clientWidth / 2, ch = container.clientHeight / 2; const ns = Math.min(5, scale * 1.3); tx = cw - (cw - tx) * (ns / scale); ty = ch - (ch - ty) * (ns / scale); scale = ns; applyTransform(); }});
@@ -253,7 +348,7 @@ const GITHUB_BASE = "https://github.com/h4ksclaw/vidforge/blob/main/src/vidforge
 </html>"""
 
     (site_dir / "index.html").write_text(html)
-    print(f"Built site: {recipe_name}")
+    print(f"Built site: {recipe_name} ({len(FN_META)} pipeline functions auto-detected)")
 
 
 if __name__ == "__main__":
