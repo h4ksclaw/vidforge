@@ -4,6 +4,8 @@ Modular AI-powered video generation system. Takes data from multiple sources, co
 
 Built to run on GitHub Actions for free — no server, no database, just Python + ffmpeg.
 
+**🔗 Live Pipeline DAG:** [h4ksclaw.github.io/vidforge](https://h4ksclaw.github.io/vidforge/) — interactive viewer with pan/zoom, code links, and auto-generated from the Hamilton DAG.
+
 ## How It Works
 
 1. **Define a recipe** (YAML) — what data, what style, which platforms
