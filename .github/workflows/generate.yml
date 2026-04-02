@@ -22,7 +22,7 @@ permissions:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
@@ -57,7 +57,7 @@ jobs:
         run: |
           RECIPE="${{ github.event.inputs.recipe || 'config/recipes/anime_heights_dbz.yaml' }}"
           SKIP_BG="${{ github.event.inputs.skip_bg_removal || 'false' }}"
-          uv run vidforge generate "$RECIPE" --export-dag output/dag.html
+          uv run vidforge generate "$RECIPE" --export-dag output/dag.svg
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

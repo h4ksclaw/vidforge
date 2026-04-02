@@ -359,7 +359,12 @@ def run_pipeline(
     )
 
     if export_dag:
-        dr.display_all_functions(output_file_path=export_dag)
+        if not export_dag.endswith(".svg"):
+            export_dag += ".svg"
+        dr.display_all_functions(
+            output_file_path=export_dag,
+            render_kwargs={"format": "svg"},
+        )
 
     result = dr.execute(
         ["render_video"],
