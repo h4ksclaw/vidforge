@@ -361,6 +361,7 @@ def run_pipeline(
     if export_dag:
         if not export_dag.endswith(".svg"):
             export_dag += ".svg"
+        Path(export_dag).parent.mkdir(parents=True, exist_ok=True)
         dr.display_all_functions(
             output_file_path=export_dag,
             render_kwargs={"format": "svg"},
