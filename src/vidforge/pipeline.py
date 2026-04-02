@@ -25,9 +25,9 @@ def load_recipe(recipe_path: str) -> Recipe:
     return Recipe(**data)
 
 
-def load_characters(recipe: Recipe) -> list[dict[str, Any]]:
+def load_characters(load_recipe: Recipe) -> list[dict[str, Any]]:
     """Load character list from recipe's source_config.characters_file."""
-    cfg = recipe.source_config
+    cfg = load_recipe.source_config
     chars_file = cfg.get("characters_file")
     if not chars_file:
         return []
@@ -39,40 +39,42 @@ def load_characters(recipe: Recipe) -> list[dict[str, Any]]:
     return data.get("characters", [])
 
 
-def build_items(characters: list[dict[str, Any]]) -> list[Item]:
+def build_items(load_characters: list[dict[str, Any]]) -> list[Item]:
     """Convert raw character dicts to Item models."""
     return [
-        Item(name=c["name"], value=c["height"]) for c in characters if "name" in c and "height" in c
+        Item(name=c["name"], value=c["height"])
+        for c in load_characters
+        if "name" in c and "height" in c
     ]
 
 
-def build_target(recipe: Recipe) -> Target:
+def build_target(load_recipe: Recipe) -> Target:
     """Build Target from recipe target name."""
     targets = {
         "youtube": Target(name="youtube", width=1920, height=1080),
         "tiktok": Target(name="tiktok", width=1080, height=1920),
         "reels": Target(name="reels", width=1080, height=1920),
     }
-    return targets.get(recipe.target, targets["youtube"])
+    return targets.get(load_recipe.target, targets["youtube"])
 
 
 # ─── Image fetching ──────────────────────────────────────────────────────────
 
 
 def fetch_images(
-    items: list[Item],
-    recipe: Recipe,
+    build_items: list[Item],
+    load_recipe: Recipe,
 ) -> list[Item]:
     """Find best images for each character via Fandom API."""
-    wiki = recipe.source_config.get("wiki", "")
+    wiki = load_recipe.source_config.get("wiki", "")
     if not wiki:
-        return items
+        return build_items
 
-    characters = load_characters(recipe)
+    characters = load_characters(load_recipe)
     char_pages = {c["name"]: c.get("wiki_page", c["name"]) for c in characters}
 
     result = []
-    for item in items:
+    for item in build_items:
         page = char_pages.get(item.name, item.name)
         url = find_best_image(wiki, page)
         if url:
@@ -83,12 +85,12 @@ def fetch_images(
 
 
 def process_images(
-    items: list[Item],
+    fetch_images: list[Item],
     skip_bg_removal: bool = False,
 ) -> list[Item]:
     """Download images, remove backgrounds, apply quality filters."""
     result = []
-    for item in items:
+    for item in fetch_images:
         processed = fetch_and_process_image(item, skip_bg_removal=skip_bg_removal)
         result.append(processed)
     return [i for i in result if i.image_path]
@@ -97,9 +99,9 @@ def process_images(
 # ─── Sorting ─────────────────────────────────────────────────────────────────
 
 
-def sorted_items(items: list[Item]) -> list[Item]:
+def sorted_items(process_images: list[Item]) -> list[Item]:
     """Sort items by value (height) ascending."""
-    return sorted(items, key=lambda i: i.value)
+    return sorted(process_images, key=lambda i: i.value)
 
 
 # ─── Strip rendering ────────────────────────────────────────────────────────
@@ -107,8 +109,8 @@ def sorted_items(items: list[Item]) -> list[Item]:
 
 def render_strip(
     sorted_items: list[Item],
-    target: Target,
-    recipe: Recipe,
+    build_target: Target,
+    load_recipe: Recipe,
 ) -> tuple[Path, float]:
     """Build the wide character strip image. Returns (strip_path, duration)."""
     chars = [{"name": i.name, "height": i.value, "img_path": i.image_path} for i in sorted_items]
@@ -116,8 +118,8 @@ def render_strip(
     if len(chars) < 2:
         raise ValueError("Need at least 2 characters")
 
-    width = target.width
-    height = target.height
+    width = build_target.width
+    height = build_target.height
     max_h = max(c["height"] for c in chars)
     margin_bottom = 130
     margin_top = 80
@@ -291,13 +293,13 @@ def render_strip(
 
 def render_video(
     render_strip: tuple[Path, float],
-    target: Target,
+    build_target: Target,
 ) -> Path:
     """Render scrolling video from strip using ffmpeg crop filter."""
     strip_path, duration = render_strip
-    width = target.width
-    height = target.height
-    fps = target.fps
+    width = build_target.width
+    height = build_target.height
+    fps = build_target.fps
 
     strip_img = Image.open(strip_path)
     strip_w = strip_img.width
