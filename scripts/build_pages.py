@@ -237,6 +237,13 @@ const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pi
   svgEl.querySelectorAll('g.node path[stroke="black"], g.node polygon[stroke="black"]').forEach(p => p.setAttribute('stroke', '#484f58'));
   svgEl.querySelectorAll('g.node text[fill="black"]').forEach(t => t.setAttribute('fill', '#c9d1d9'));
   svgEl.querySelectorAll('text[fill="black"]').forEach(t => t.setAttribute('fill', '#8b949e'));
+
+  // Hide the Hamilton legend cluster entirely
+  svgEl.querySelectorAll('g.cluster').forEach(g => {{
+    const title = g.querySelector('title');
+    if (title && title.textContent.includes('legend')) g.style.display = 'none';
+  }});
+
   container.appendChild(svgEl);
   const nodeGroups = {{}};
   let nodeCount = 0;
