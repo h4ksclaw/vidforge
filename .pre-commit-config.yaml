@@ -23,8 +23,8 @@ repos:
     hooks:
       - id: no-scoped-imports
         name: No scoped imports (must be at top of file)
-        entry: bash -c 'if grep -rn "^[[:space:]].*\bimport\b" src/ --include="*.py" | grep -v "^[^:]*:[[:space:]]*#"; then echo "❌ Found scoped imports — all imports must be at top of file"; exit 1; fi'
-        language: system
+        entry: scripts/check-no-scoped-imports.sh
+        language: script
         pass_filenames: false
 
       - id: no-relative-imports

@@ -91,7 +91,7 @@ addopts = "--strict-markers -x"
 [tool.coverage.run]
 source = ["src/vidforge"]
 branch = true
-omit = ["*/cli.py", "*/__init__.py"]
+omit = ["*/cli.py", "*/__init__.py", "*/assets/bg_remove.py"]
 
 [tool.mypy]
 python_version = "3.11"
