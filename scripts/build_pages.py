@@ -118,8 +118,6 @@ def build_site(output_dir: Path, site_dir: Path, recipe_name: str = "VidForge"):
     if dag_file.exists():
         dag_svg = json.dumps(dag_file.read_text())
 
-    github_url = f"https://github.com/{GITHUB_REPO}/blob/main/{PIPELINE_PATH}"
-
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>

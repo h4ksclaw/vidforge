@@ -67,6 +67,7 @@ select = [
     "B",    # flake8-bugbear
     "SIM",  # flake8-simplify
     "RUF",  # ruff-specific
+    "TID",  # flake8-tidy-imports (single import per line)
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
