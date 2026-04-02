@@ -1,5 +1,6 @@
 """Hamilton DAG pipeline for anime height comparison videos."""
 
+import importlib
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -351,10 +352,12 @@ def run_pipeline(
     export_dag: str | None = None,
 ) -> Path:
     """Run the Hamilton DAG pipeline."""
+    this_module = importlib.import_module("vidforge.pipeline")
+
     dr = (
         driver.Builder()
         .with_config({"skip_bg_removal": skip_bg_removal})
-        .with_modules(__name__)
+        .with_modules(this_module)
         .build()
     )
 
