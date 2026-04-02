@@ -1,15 +1,14 @@
-"""VidForge CLI."""
+"""VidForge CLI — generate, upload, preview, dag commands."""
 
+import shutil
 from pathlib import Path
 
 import typer
 from rich.console import Console
 
-app = typer.Typer(
-    name="vidforge",
-    help="Modular video generation system.",
-    no_args_is_help=True,
-)
+from vidforge.pipeline import run_pipeline
+
+app = typer.Typer(help="VidForge — modular video generation system")
 console = Console()
 
 
@@ -22,21 +21,16 @@ def generate(
     export_dag: Path | None = typer.Option(None, "--export-dag", help="Export DAG to file"),
 ) -> None:
     """Generate a video from a recipe."""
-    console.print(f"[bold]Generating video from:[/] {recipe}")
-    console.print(f"[dim]Target: {target}[/]")
+    console.print(f"[bold]Generating video from {recipe}[/bold]")
 
-    if dry_run:
-        console.print("[yellow]Dry run — showing DAG only[/]")
-        # TODO: Hamilton DAG visualization
-        return
+    dag_path = str(export_dag) if export_dag else None
+    video_path = run_pipeline(str(recipe), export_dag=dag_path)
 
-    if export_dag:
-        console.print(f"[dim]Exporting DAG to {export_dag}[/]")
-        # TODO: Hamilton DAG export
-        return
+    if output and video_path:
+        shutil.copy2(video_path, output)
+        video_path = output
 
-    # TODO: Load recipe, build Hamilton DAG, run pipeline
-    console.print("[green]Done![/]")
+    console.print(f"[green]✅ Output: {video_path}[/green]")
 
 
 @app.command()
@@ -46,8 +40,7 @@ def upload(
     title: str | None = typer.Option(None, help="Video title"),
 ) -> None:
     """Upload a video to a platform."""
-    console.print(f"[bold]Uploading to {platform}:[/] {video}")
-    # TODO: Platform upload logic
+    console.print(f"[yellow]Upload to {platform} not yet implemented[/yellow]")
 
 
 @app.command()
@@ -55,9 +48,8 @@ def preview(
     recipe: Path = typer.Argument(..., help="Path to recipe YAML file"),
     step: str = typer.Option("validate", help="Run pipeline up to this step"),
 ) -> None:
-    """Generate an HTML preview of pipeline intermediate results."""
-    console.print(f"[bold]Previewing pipeline up to:[/] {step}")
-    # TODO: Run pipeline to step, generate HTML preview
+    """Preview pipeline output without rendering."""
+    console.print("[yellow]Preview not yet implemented[/yellow]")
 
 
 @app.command()
@@ -67,9 +59,6 @@ def dag(
     format: str = typer.Option("html", help="Export format (html/svg/png/dot/mermaid)"),
 ) -> None:
     """Export the pipeline DAG visualization."""
-    console.print(f"[bold]Exporting DAG:[/] {output} ({format})")
-    # TODO: Hamilton DAG export
-
-
-if __name__ == "__main__":
-    app()
+    console.print(f"[bold]Exporting DAG to {output}[/bold]")
+    run_pipeline(str(recipe), export_dag=str(output))
+    console.print(f"[green]✅ DAG exported to {output}[/green]")

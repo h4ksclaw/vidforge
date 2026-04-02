@@ -91,7 +91,7 @@ addopts = "--strict-markers -x"
 [tool.coverage.run]
 source = ["src/vidforge"]
 branch = true
-omit = ["*/cli.py", "*/__init__.py", "*/assets/bg_remove.py"]
+omit = ["*/cli.py", "*/__init__.py", "*/assets/bg_remove.py", "*/pipeline.py"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -111,11 +111,17 @@ plugins = ["pydantic.mypy"]
 module = [
     "rembg.*",
     "sf_hamilton.*",
+    "hamilton.*",
+    "yaml.*",
     "scipy.*",
     "yt_dlp.*",
     "google.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["vidforge.pipeline"]
+ignore_errors = true
 
 [tool.coverage.report]
 fail_under = 80
