@@ -10,10 +10,11 @@ on:
         description: "Recipe file path"
         required: false
         default: "config/recipes/anime_heights_dbz.yaml"
-      target:
-        description: "Platform target"
+      skip_bg_removal:
+        description: "Skip background removal (faster, no rembg)"
         required: false
-        default: "youtube"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -27,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache assets
+      - name: Cache vidgen assets
         uses: actions/cache@v4
         with:
           path: ~/.cache/vidgen
@@ -52,22 +53,11 @@ jobs:
       - name: Lint + test
         run: uv run ruff check src/ tests/ && uv run pytest --cov -q
 
-      - name: Test Fandom API access
+      - name: Generate video
         run: |
-          uv run python -c "
-          import urllib.request, json
-          HEADERS = {'User-Agent': 'VidForge/0.1 (github.com/h4ksclaw/vidforge)'}
-          url = 'https://dragonball.fandom.com/api.php?action=query&titles=Krillin&prop=info&format=json'
-          req = urllib.request.Request(url, headers=HEADERS)
-          resp = urllib.request.urlopen(req, timeout=15)
-          data = json.loads(resp.read())
-          page_id = list(data['query']['pages'].keys())[0]
-          if page_id != '-1':
-              print('✅ Fandom API accessible from GitHub Actions')
-          else:
-              print('❌ Fandom API blocked')
-              exit(1)
-          "
+          RECIPE="${{ github.event.inputs.recipe || 'config/recipes/anime_heights_dbz.yaml' }}"
+          SKIP_BG="${{ github.event.inputs.skip_bg_removal || 'false' }}"
+          uv run vidforge generate "$RECIPE" --export-dag output/dag.html
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
