@@ -409,6 +409,7 @@ def run_pipeline(
         driver.Builder()
         .with_config({"skip_bg_removal": skip_bg_removal})
         .with_modules(this_module)
+        .enable_dynamic_execution()
         .with_local_executor(MultiThreadingExecutor(max_tasks=max_workers))
         .build()
     )
