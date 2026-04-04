@@ -41,6 +41,9 @@ jobs:
       - name: Install deps
         run: uv sync --extra dev --extra music
 
+      - name: Install graphviz
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq graphviz
+
       - name: Download output artifact (from Generate Videos)
         if: github.event_name == 'workflow_run'
         env:
