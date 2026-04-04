@@ -17,16 +17,19 @@ GENERATORS_DIR = "src/vidforge/generators"
 
 
 _SVG_XML_DECL_RE = re.compile(r"<\?xml[^?]*\?>\s*")
+_SVG_DOCTYPE_RE = re.compile(r"<!DOCTYPE[^>]*>\s*", re.IGNORECASE)
 _SVG_HTML_WRAPPER_RE = re.compile(r"<html[^>]*>.*?<body[^>]*>(.*)</body>\s*</html>", re.DOTALL)
 
 
 def _clean_svg(svg_text: str) -> str:
-    """Strip XML declaration and <html>/<body> wrappers from graphviz SVG output.
+    """Strip XML/DOCTYPE declarations and html/body wrappers from graphviz SVG.
 
-    graphviz wraps SVG in <html><body>...</body></html> which causes XML
-    parser errors when embedded in an HTML page via DOMParser.
+    graphviz output includes <?xml?> and <!DOCTYPE> declarations and may
+    wrap SVG in <html><body>...</body></html>. All of these cause XML parser
+    errors when embedded in an HTML page via DOMParser("image/svg+xml").
     """
     svg_text = _SVG_XML_DECL_RE.sub("", svg_text)
+    svg_text = _SVG_DOCTYPE_RE.sub("", svg_text)
     match = _SVG_HTML_WRAPPER_RE.search(svg_text)
     if match:
         svg_text = match.group(1)
