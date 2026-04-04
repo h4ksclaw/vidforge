@@ -11,6 +11,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import yt_dlp
+
 from vidforge.assets.cache import cache_dir
 
 logger = logging.getLogger(__name__)
@@ -26,8 +28,6 @@ def _search_cc(query: str, max_results: int = 5) -> list[tuple[str, int, str]]:
 
     Returns list of (video_id, duration_seconds, title), filtered to 60s-30min.
     """
-    import yt_dlp
-
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,

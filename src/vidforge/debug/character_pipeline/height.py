@@ -21,7 +21,8 @@ import sys
 import time
 
 from vidforge.debug import ReportBuilder
-from vidforge.sources.fandom import _api, parse_height
+from vidforge.sources.fandom import _api
+from vidforge.sources.fandom import parse_height
 
 
 def get_raw_height_field(wiki: str, page: str) -> str | None:

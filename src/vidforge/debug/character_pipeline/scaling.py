@@ -26,11 +26,17 @@ import time
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
 
-from vidforge.assets.bg_remove import content_ratio, height_fill, remove_background
-from vidforge.assets.images import download_image, fetch_and_process_image
-from vidforge.debug import ReportBuilder, upload_file
+from vidforge.assets.bg_remove import content_ratio
+from vidforge.assets.bg_remove import height_fill
+from vidforge.assets.bg_remove import remove_background
+from vidforge.assets.images import download_image
+from vidforge.assets.images import fetch_and_process_image
+from vidforge.debug import ReportBuilder
+from vidforge.debug import upload_file
 from vidforge.models import Item
 from vidforge.sources.fandom import find_best_image
 

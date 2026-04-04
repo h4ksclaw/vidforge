@@ -28,16 +28,17 @@ import sys
 import time
 from pathlib import Path
 
-from vidforge.assets.bg_remove import content_ratio, height_fill, remove_background
+from vidforge.assets.bg_remove import content_ratio
+from vidforge.assets.bg_remove import height_fill
+from vidforge.assets.bg_remove import remove_background
 from vidforge.assets.images import download_image
-from vidforge.debug import ReportBuilder, upload_file
-from vidforge.sources.fandom import (
-    BAD_IMAGE_KEYWORDS,
-    _score_image_url,
-    find_best_image,
-    get_image_url,
-    get_page_images,
-)
+from vidforge.debug import ReportBuilder
+from vidforge.debug import upload_file
+from vidforge.sources.fandom import BAD_IMAGE_KEYWORDS
+from vidforge.sources.fandom import _score_image_url
+from vidforge.sources.fandom import find_best_image
+from vidforge.sources.fandom import get_image_url
+from vidforge.sources.fandom import get_page_images
 
 # Thresholds from vidforge.assets.images.fetch_and_process_image
 MAX_CONTENT_RATIO = 0.75

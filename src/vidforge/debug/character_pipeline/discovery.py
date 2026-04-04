@@ -19,12 +19,10 @@ import sys
 import time
 
 from vidforge.debug import ReportBuilder
-from vidforge.sources.fandom import (
-    SKIP_WORDS,
-    _api,
-    discover_characters,
-    get_height,
-)
+from vidforge.sources.fandom import SKIP_WORDS
+from vidforge.sources.fandom import _api
+from vidforge.sources.fandom import discover_characters
+from vidforge.sources.fandom import get_height
 
 
 def main() -> None:
