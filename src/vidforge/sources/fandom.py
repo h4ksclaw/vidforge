@@ -80,7 +80,7 @@ SKIP_WORDS = [
     "tanaka",
 ]
 
-# Keywords that indicate bad image filenames
+# Keywords that indicate bad image filenames (action scenes, not standing poses)
 BAD_IMAGE_KEYWORDS = [
     "logo",
     "icon",
@@ -103,6 +103,25 @@ BAD_IMAGE_KEYWORDS = [
     "stamp",
     "chibi",
     "sprite",
+    "shreds",
+    "beats",
+    "cuts",
+    "shoots",
+    "tortures",
+    "slashes",
+    "punches",
+    "kicks",
+    "assaults",
+    "stabs",
+    "crushes",
+    "destroys",
+    "murders",
+    "interrogates",
+    "yells at",
+    "threatens",
+    "holds",
+    "popularity poll",
+    "overlay",
 ]
 
 
@@ -288,14 +307,18 @@ def fetch_characters(
 def find_best_image(wiki: str, character_name: str) -> str | None:
     """Find the best image URL for a character.
 
-    Returns the URL of the best-scoring full-body image, or None.
+    Two-pass approach:
+    1. Score all images by filename keywords (profile/render/infobox = high)
+    2. If no high-score candidates, fall back to any image containing the character name
+    3. Filter by BAD_IMAGE_KEYWORDS (action scenes, non-character images)
+
+    Returns the URL of the highest-scoring image, or None.
     """
 
     images = get_page_images(wiki, character_name)
     name_parts = character_name.lower().replace("_", " ").split()
 
-    best_url: str | None = None
-    best_score = 0.0
+    candidates: list[tuple[float, str, str]] = []  # (score, fname, url)
 
     for fname in images:
         fname_lower = fname.lower().replace("_", " ").replace("-", " ")
@@ -310,25 +333,38 @@ def find_best_image(wiki: str, character_name: str) -> str | None:
             continue
 
         score = _score_image_url(url)
-        if score > best_score and score > 0.5:
-            best_score = score
-            best_url = url
-        time.sleep(0.2)
+        candidates.append((score, fname, url))
+        time.sleep(0.1)
 
-    return best_url
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: -x[0])
+    return candidates[0][2]
 
 
 def _score_image_url(url: str) -> float:
-    """Score an image URL for suitability based on filename patterns."""
+    """Score an image URL for suitability based on filename patterns.
+
+    Higher scores = more likely a clean standing render/profile.
+    Falls back to 1.0 for any image that passes the name+keyword filters
+    in find_best_image (so content-based quality checks can still evaluate it).
+    """
     fname = unquote(url.lower()).replace("_", " ").replace("-", " ")
 
-    # Boost scores for good patterns
-    score = 0.0
-    if any(kw in fname for kw in ["infobox", "profile", "render"]):
-        score += 3.0
-    if any(kw in fname for kw in ["anime", "design", "artwork"]):
-        score += 2.0
-    if "manga" in fname:
-        score += 1.0
+    # Strong signals — clean character images
+    if any(kw in fname for kw in ["profile", "render", "databook"]):
+        return 5.0
+    if any(kw in fname for kw in ["infobox", "character image"]):
+        return 4.0
+    if any(kw in fname for kw in ["full body", "full_body", "standing"]):
+        return 4.0
 
-    return score
+    # Medium signals
+    if any(kw in fname for kw in ["anime", "design", "artwork", "costume"]):
+        return 3.0
+    if "manga" in fname:
+        return 1.5
+
+    # Fallback — image passed name+keyword filters, let content checks decide
+    return 1.0

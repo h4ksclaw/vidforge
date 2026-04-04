@@ -65,11 +65,20 @@ def fetch_and_process_image(
             return item  # bg removal failed completely
 
     # Quality filters
+    aspect = img.width / img.height if img.height else 99.0
     cr = content_ratio(img)
-    if cr > max_content_ratio:
-        return item  # face crop, not full body
-
     hf = height_fill(img)
+
+    # For tall narrow images (aspect < 0.6), content_ratio is expected to be
+    # high because the character naturally fills most of the width.
+    # Only apply content_ratio threshold to wider images.
+    effective_cr_max = max_content_ratio
+    if aspect < 0.6:
+        effective_cr_max = 0.90  # allow tighter crops for tall images
+
+    if cr > effective_cr_max:
+        return item  # face crop or overly wide content
+
     if hf < min_height_fill:
         return item  # cropped image
 
