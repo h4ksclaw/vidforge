@@ -1,8 +1,8 @@
 """Build the GitHub Pages site from pipeline output.
 
-Parses vidforge/pipeline.py with ast to extract function metadata
+Parses generator pipeline.py files with ast to extract function metadata
 (line numbers, signatures, docstrings, dependencies) — no imports needed.
-Add a new Hamilton function and the DAG page updates itself.
+Add a new generator and the DAG page updates itself.
 """
 
 import ast
@@ -12,18 +12,15 @@ import sys
 from pathlib import Path
 
 GITHUB_REPO = "h4ksclaw/vidforge"
-PIPELINE_PATH = "src/vidforge/pipeline.py"
+GENERATORS_DIR = "src/vidforge/generators"
 
 
-def extract_pipeline_metadata(repo_root: Path) -> dict:
-    """Parse pipeline.py with ast to get function metadata."""
-    pipeline_file = repo_root / PIPELINE_PATH
-    if not pipeline_file.exists():
-        pipeline_file = Path("src/vidforge/pipeline.py")
-    source = pipeline_file.read_text()
+def extract_pipeline_metadata(pipeline_path: Path) -> dict:
+    """Parse a pipeline.py with ast to get function metadata."""
+    source = pipeline_path.read_text()
     tree = ast.parse(source)
 
-    fn_meta = {}
+    fn_meta: dict[str, dict[str, str | list[str]]] = {}
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef):
             continue
@@ -47,7 +44,6 @@ def extract_pipeline_metadata(repo_root: Path) -> dict:
             elif isinstance(node.returns, ast.Name):
                 ret_type = node.returns.id
             elif isinstance(node.returns, ast.Subscript):
-                # e.g. list[Item], tuple[Path, float]
                 ret_type = ast.unparse(node.returns)
             else:
                 ret_type = ast.unparse(node.returns) if hasattr(ast, "unparse") else "Any"
@@ -80,24 +76,53 @@ def extract_pipeline_metadata(repo_root: Path) -> dict:
     return fn_meta
 
 
-def build_site(output_dir: Path, site_dir: Path, recipe_name: str = "VidForge"):
+def discover_generators(repo_root: Path) -> dict[str, dict]:
+    """Find all generator pipeline.py files and extract metadata."""
+    generators_dir = repo_root / GENERATORS_DIR
+    if not generators_dir.exists():
+        return {}
+
+    generators: dict[str, dict] = {}
+    for child in sorted(generators_dir.iterdir()):
+        if not child.is_dir() or child.name.startswith("_"):
+            continue
+        pipeline_file = child / "pipeline.py"
+        if pipeline_file.exists():
+            generators[child.name] = {
+                "path": str(pipeline_file),
+                "metadata": extract_pipeline_metadata(pipeline_file),
+            }
+    return generators
+
+
+def build_site(output_dir: Path, site_dir: Path, recipe_name: str = "VidForge") -> None:
     """Generate the interactive DAG viewer HTML page."""
     repo_root = Path.cwd()
 
-    # Try to find pipeline.py
-    candidates = [
-        repo_root / "src/vidforge/pipeline.py",
-        Path("src/vidforge/pipeline.py"),
-    ]
-    pipeline_file = None
-    for c in candidates:
-        if c.exists():
-            pipeline_file = c
-            repo_root = c.parent.parent.parent  # src/vidforge -> repo root
+    # Try to find repo root
+    for candidate in [
+        repo_root / "src" / "vidforge" / "generators",
+        Path("src/vidforge/generators"),
+    ]:
+        if candidate.exists():
+            repo_root = candidate.parent.parent.parent
             break
 
-    fn_meta = extract_pipeline_metadata(repo_root) if pipeline_file else {}
-    fn_meta_json = json.dumps(fn_meta)
+    generators = discover_generators(repo_root)
+
+    # Default to legacy pipeline.py if no generators found
+    if not generators:
+        legacy = repo_root / "src/vidforge/pipeline.py"
+        if legacy.exists():
+            generators["legacy"] = {
+                "path": str(legacy),
+                "metadata": extract_pipeline_metadata(legacy),
+            }
+
+    # Serialize all generators' metadata
+    generators_json = json.dumps(generators)
+    gen_names = sorted(generators.keys())
+    gen_names_json = json.dumps(gen_names)
 
     site_dir.mkdir(parents=True, exist_ok=True)
 
@@ -192,6 +217,15 @@ header h1 a:hover {{ color: #58a6ff; }}
   display: flex; align-items: center; justify-content: center;
 }}
 #zoom-controls button:hover {{ background: #30363d; }}
+#gen-tabs {{
+  display: flex; gap: 0.25rem; flex-wrap: wrap;
+}}
+#gen-tabs .tab {{
+  background: #21262d; border: 1px solid #30363d; color: #8b949e;
+  padding: 0.3rem 0.7rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+}}
+#gen-tabs .tab:hover {{ color: #c9d1d9; background: #30363d; }}
+#gen-tabs .tab.active {{ background: #1f6feb22; border-color: #1f6feb44; color: #58a6ff; }}
 </style>
 </head>
 <body>
@@ -199,9 +233,10 @@ header h1 a:hover {{ color: #58a6ff; }}
   <div class="header-left">
     <h1>\U0001f3ac <a href="https://github.com/{GITHUB_REPO}">VidForge</a> — {recipe_name}</h1>
     <span class="badge" id="node-count"></span>
+    <div id="gen-tabs"></div>
   </div>
   <div class="header-right">
-    <a class="btn" href="https://github.com/{GITHUB_REPO}" target="_blank" style="text-decoration:none">⌨ Code</a>
+    <a class="btn" href="https://github.com/{GITHUB_REPO}" target="_blank" style="text-decoration:none">\u2328 Code</a>
     <button class="btn" id="btn-fit">\u229e Fit</button>
     <button class="btn" id="btn-reset">\u21ba Reset</button>
   </div>
@@ -215,19 +250,47 @@ header h1 a:hover {{ color: #58a6ff; }}
 </div>
 <script>
 const DAG_SVG = {dag_svg if dag_svg else "null"};
-const FN_META = {fn_meta_json};
-const GITHUB_BASE = "https://github.com/{GITHUB_REPO}/blob/main/{PIPELINE_PATH}";
+const GENERATORS = {generators_json};
+const GEN_NAMES = {gen_names_json};
+const GITHUB_BASE = "https://github.com/{GITHUB_REPO}/blob/main/";
 const typeColors = {{ config: '#da3633', source: '#1f6feb', fetch: '#a371f7', process: '#f0883e', transform: '#3fb950', render: '#58a6ff', orchestrator: '#f778ba' }};
 const typeBg = {{ config: '#da363322', source: '#1f6feb22', fetch: '#a371f722', process: '#f0883e22', transform: '#3fb95022', render: '#58a6ff22', orchestrator: '#f778ba22' }};
 const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pipeline_inputs', 'input', 'function', 'skip_bg_removal'];
 
-(function() {{
+let currentGen = GEN_NAMES[0] || null;
+
+function buildTabs() {{
+  const tabs = document.getElementById('gen-tabs');
+  GEN_NAMES.forEach(name => {{
+    const tab = document.createElement('div');
+    tab.className = 'tab' + (name === currentGen ? ' active' : '');
+    tab.textContent = name;
+    tab.onclick = () => {{ currentGen = name; buildTabs(); renderDAG(); }};
+    tabs.appendChild(tab);
+  }});
+}}
+
+function renderDAG() {{
   const container = document.getElementById('dag-container');
   const tooltip = document.getElementById('dag-tooltip');
-  if (!DAG_SVG) {{
-    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#484f58;font-size:1.2rem">No DAG available</div>';
+  container.innerHTML = '';
+
+  if (!currentGen || !GENERATORS[currentGen]) {{
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#484f58;font-size:1.2rem">No generators found</div>';
     return;
   }}
+
+  const gen = GENERATORS[currentGen];
+  const fnMeta = gen.metadata;
+  const pipelinePath = gen.path;
+  const fnMetaJson = JSON.stringify(fnMeta);
+
+  if (!DAG_SVG) {{
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#484f58;font-size:1.2rem">No DAG SVG available</div>';
+    document.getElementById('node-count').textContent = Object.keys(fnMeta).length + ' nodes';
+    return;
+  }}
+
   const svgEl = new DOMParser().parseFromString(DAG_SVG, 'image/svg+xml').documentElement;
   svgEl.style.background = 'transparent';
   svgEl.querySelectorAll('polygon[fill="white"]').forEach(p => p.setAttribute('fill', 'transparent'));
@@ -237,7 +300,6 @@ const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pi
   svgEl.querySelectorAll('g.node text[fill="black"]').forEach(t => t.setAttribute('fill', '#c9d1d9'));
   svgEl.querySelectorAll('text[fill="black"]').forEach(t => t.setAttribute('fill', '#8b949e'));
 
-  // Hide the Hamilton legend cluster entirely
   svgEl.querySelectorAll('g.cluster').forEach(g => {{
     const title = g.querySelector('title');
     if (title && title.textContent.includes('legend')) g.style.display = 'none';
@@ -259,7 +321,7 @@ const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pi
     if (internalNodes.includes(name)) {{ wrapper.style.opacity = '0.3'; }}
     else {{
       nodeCount++;
-      const meta = FN_META[name];
+      const meta = fnMeta[name];
       if (meta) {{
         const color = typeColors[meta.type] || '#58a6ff';
         const bg = typeBg[meta.type] || '#58a6ff22';
@@ -271,12 +333,12 @@ const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pi
     }}
     wrapper.addEventListener('click', (e) => {{
       e.stopPropagation();
-      const meta = FN_META[name];
-      if (meta && meta.line) window.open(GITHUB_BASE + '#L' + meta.line, '_blank');
+      const meta = fnMeta[name];
+      if (meta && meta.line) window.open(GITHUB_BASE + pipelinePath + '#L' + meta.line, '_blank');
     }});
     wrapper.addEventListener('mouseenter', () => {{
       if (internalNodes.includes(name)) return;
-      const meta = FN_META[name];
+      const meta = fnMeta[name];
       if (!meta) return;
       const typeColor = typeColors[meta.type] || '#58a6ff';
       const typeBg2 = typeBg[meta.type] || '#58a6ff22';
@@ -285,7 +347,7 @@ const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pi
       if (meta.return_type) html += '<div class="fn-ret">\u2192 ' + meta.return_type + '</div>';
       if (meta.desc) html += '<div class="fn-desc">' + meta.desc + '</div>';
       if (meta.deps && meta.deps.length) html += '<div class="fn-deps">\u2b05 ' + meta.deps.join(', ') + '</div>';
-      if (meta.line) html += '<a class="fn-link" href="' + GITHUB_BASE + '#L' + meta.line + '" target="_blank">\u2192 View source (line ' + meta.line + ')</a>';
+      if (meta.line) html += '<a class="fn-link" href="' + GITHUB_BASE + pipelinePath + '#L' + meta.line + '" target="_blank">\u2192 View source (line ' + meta.line + ')</a>';
       tooltip.innerHTML = html;
       tooltip.style.display = 'block';
       svgEl.querySelectorAll('.node-group').forEach(g => g.classList.add('dimmed'));
@@ -315,43 +377,60 @@ const internalNodes = ['_load_recipe_inputs', '_process_images_inputs', '_run_pi
     g.parentNode.insertBefore(wrapper, g);
     wrapper.appendChild(g);
   }});
-  let scale = 1, tx = 0, ty = 0, isPanning = false, startX, startY;
-  function applyTransform() {{ svgEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; svgEl.style.transformOrigin = '0 0'; }}
-  container.addEventListener('mousedown', (e) => {{ if (e.target.closest('.node-group')) return; isPanning = true; startX = e.clientX - tx; startY = e.clientY - ty; }});
-  window.addEventListener('mousemove', (e) => {{ if (!isPanning) return; tx = e.clientX - startX; ty = e.clientY - startY; applyTransform(); }});
-  window.addEventListener('mouseup', () => {{ isPanning = false; }});
-  container.addEventListener('wheel', (e) => {{
-    e.preventDefault();
-    const rect = container.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const ns = Math.max(0.1, Math.min(5, scale * delta));
-    tx = mx - (mx - tx) * (ns / scale); ty = my - (my - ty) * (ns / scale); scale = ns;
-    applyTransform();
-  }}, {{ passive: false }});
-  function fitToScreen() {{
-    const svgW = svgEl.viewBox?.baseVal?.width || svgEl.getBBox().width;
-    const svgH = svgEl.viewBox?.baseVal?.height || svgEl.getBBox().height;
-    const cw = container.clientWidth, ch = container.clientHeight;
-    scale = Math.min(cw / svgW, ch / svgH) * 0.9;
-    tx = (cw - svgW * scale) / 2; ty = (ch - svgH * scale) / 2;
-    applyTransform();
-  }}
-  document.getElementById('btn-fit').addEventListener('click', fitToScreen);
-  document.getElementById('btn-reset').addEventListener('click', () => {{ scale = 1; tx = 0; ty = 0; applyTransform(); }});
-  document.getElementById('zoom-in').addEventListener('click', () => {{ const cw = container.clientWidth / 2, ch = container.clientHeight / 2; const ns = Math.min(5, scale * 1.3); tx = cw - (cw - tx) * (ns / scale); ty = ch - (ch - ty) * (ns / scale); scale = ns; applyTransform(); }});
-  document.getElementById('zoom-out').addEventListener('click', () => {{ const cw = container.clientWidth / 2, ch = container.clientHeight / 2; const ns = Math.max(0.1, scale * 0.7); tx = cw - (cw - tx) * (ns / scale); ty = ch - (ch - ty) * (ns / scale); scale = ns; applyTransform(); }});
-  document.getElementById('zoom-fit').addEventListener('click', fitToScreen);
-  setTimeout(fitToScreen, 100);
-  window.addEventListener('resize', () => setTimeout(fitToScreen, 100));
-  window.addEventListener('keydown', (e) => {{ if (e.key === '+' || e.key === '=') document.getElementById('zoom-in').click(); if (e.key === '-') document.getElementById('zoom-out').click(); if (e.key === '0') fitToScreen(); }});
-}})();
+  fitToScreen();
+}}
+
+let scale = 1, tx = 0, ty = 0, isPanning = false, startX, startY;
+function applyTransform() {{
+  const svgEl = document.querySelector('#dag-container svg');
+  if (svgEl) {{ svgEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; svgEl.style.transformOrigin = '0 0'; }}
+}}
+document.getElementById('dag-container').addEventListener('mousedown', (e) => {{ if (e.target.closest('.node-group')) return; isPanning = true; startX = e.clientX - tx; startY = e.clientY - ty; }});
+window.addEventListener('mousemove', (e) => {{ if (!isPanning) return; tx = e.clientX - startX; ty = e.clientY - startY; applyTransform(); }});
+window.addEventListener('mouseup', () => {{ isPanning = false; }});
+document.getElementById('dag-container').addEventListener('wheel', (e) => {{
+  e.preventDefault();
+  const container = document.getElementById('dag-container');
+  const svgEl = container.querySelector('svg');
+  if (!svgEl) return;
+  const rect = container.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  const ns = Math.max(0.1, Math.min(5, scale * delta));
+  tx = mx - (mx - tx) * (ns / scale); ty = my - (my - ty) * (ns / scale); scale = ns;
+  applyTransform();
+}}, {{ passive: false }});
+function fitToScreen() {{
+  const container = document.getElementById('dag-container');
+  const svgEl = container.querySelector('svg');
+  if (!svgEl) return;
+  const svgW = svgEl.viewBox?.baseVal?.width || svgEl.getBBox().width;
+  const svgH = svgEl.viewBox?.baseVal?.height || svgEl.getBBox().height;
+  const cw = container.clientWidth, ch = container.clientHeight;
+  scale = Math.min(cw / svgW, ch / svgH) * 0.9;
+  tx = (cw - svgW * scale) / 2; ty = (ch - svgH * scale) / 2;
+  applyTransform();
+}}
+document.getElementById('btn-fit').addEventListener('click', fitToScreen);
+document.getElementById('btn-reset').addEventListener('click', () => {{ scale = 1; tx = 0; ty = 0; applyTransform(); }});
+document.getElementById('zoom-in').addEventListener('click', () => {{ const cw = document.getElementById('dag-container').clientWidth / 2, ch = document.getElementById('dag-container').clientHeight / 2; const ns = Math.min(5, scale * 1.3); tx = cw - (cw - tx) * (ns / scale); ty = ch - (ch - ty) * (ns / scale); scale = ns; applyTransform(); }});
+document.getElementById('zoom-out').addEventListener('click', () => {{ const cw = document.getElementById('dag-container').clientWidth / 2, ch = document.getElementById('dag-container').clientHeight / 2; const ns = Math.max(0.1, scale * 0.7); tx = cw - (cw - tx) * (ns / scale); ty = ch - (ch - ty) * (ns / scale); scale = ns; applyTransform(); }});
+document.getElementById('zoom-fit').addEventListener('click', fitToScreen);
+window.addEventListener('resize', () => setTimeout(fitToScreen, 100));
+window.addEventListener('keydown', (e) => {{ if (e.key === '+' || e.key === '=') document.getElementById('zoom-in').click(); if (e.key === '-') document.getElementById('zoom-out').click(); if (e.key === '0') fitToScreen(); }});
+
+buildTabs();
+renderDAG();
 </script>
 </body>
 </html>"""
 
     (site_dir / "index.html").write_text(html)
-    print(f"Built site: {recipe_name} ({len(fn_meta)} pipeline functions auto-detected)")
+    gen_count = len(generators)
+    fn_count = sum(len(g["metadata"]) for g in generators.values())
+    print(
+        f"Built site: {recipe_name} ({gen_count} generators, {fn_count} pipeline functions auto-detected)"
+    )
 
 
 if __name__ == "__main__":

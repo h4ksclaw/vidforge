@@ -122,7 +122,7 @@ module = [
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["vidforge.pipeline"]
+module = ["vidforge.pipeline", "vidforge.generators.heights.pipeline"]
 ignore_errors = true
 
 [tool.coverage.report]

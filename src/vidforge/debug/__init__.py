@@ -1,7 +1,7 @@
-"""Debug tools for vidforge — live integration testing with visual reports.
+"""VidForge debug infrastructure — report building and file upload.
 
-Run actual pipeline code, collect results, generate a sharable HTML preview.
-No mocks. Real APIs, real image processing, real uploads.
+Heights-specific debug scripts have moved to vidforge.generators.heights.debug.
+This package re-exports the shared utilities.
 """
 
 from vidforge.debug.report import ReportBuilder
