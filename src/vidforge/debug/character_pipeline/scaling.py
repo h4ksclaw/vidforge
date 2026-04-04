@@ -24,6 +24,7 @@ import argparse
 import gc
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -49,7 +50,7 @@ SCALE_FACTOR = 0.82  # 82% of available height used by tallest character
 
 # Shows to test — (wiki, character_pages with known heights)
 # Using small subsets (5-8 chars) so the debug run is fast
-SHOWS: list[dict] = [
+SHOWS: list[dict[str, Any]] = [
     {
         "name": "Dragon Ball Z",
         "wiki": "dragonball.fandom.com",
@@ -242,9 +243,9 @@ def _get_content_bbox(img: Image.Image) -> tuple[int, int, int, int] | None:
 
 
 def render_scaling_strip(
-    chars: list[dict],
+    chars: list[dict[str, Any]],
     show_name: str,
-) -> tuple[Path, dict]:
+) -> tuple[Path, dict[str, Any]]:
     """Render a visual strip showing scaled characters with content detection boxes.
 
     For each character with an image:
@@ -274,7 +275,7 @@ def render_scaling_strip(
         font_rank = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
         font_debug = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 11)
     except OSError:
-        font_name = font_ht = font_rank = font_debug = ImageFont.load_default()
+        font_name = font_ht = font_rank = font_debug = ImageFont.load_default()  # type: ignore[assignment]
 
     # Calculate widths
     gap = 60
@@ -321,7 +322,7 @@ def render_scaling_strip(
     YELLOW = (255, 255, 50)
     accent = (255, 165, 0)
     x = pad
-    scale_details: list[dict] = []
+    scale_details: list[dict[str, Any]] = []
 
     for i, c in enumerate(chars_sorted):
         bar_h = int(c["height_cm"] * scale)
@@ -351,15 +352,15 @@ def render_scaling_strip(
         }
 
         if img_path and Path(img_path).exists():
-            img = Image.open(img_path)
-            if img.mode != "RGBA":
-                img = img.convert("RGBA")
+            char_img: Image.Image = Image.open(img_path)
+            if char_img.mode != "RGBA":
+                char_img = char_img.convert("RGBA")
             detail["has_image"] = True
 
             # Get content bounding box (same detection as pipeline quality checks)
-            content = _get_content_bbox(img)
+            content = _get_content_bbox(char_img)
 
-            img_ratio = img.width / img.height
+            img_ratio = char_img.width / char_img.height
             new_h = bar_h
             new_w = int(bar_h * img_ratio)
             if new_w > char_widths[i] - 30:
@@ -367,7 +368,7 @@ def render_scaling_strip(
                 new_h = int(new_w / img_ratio)
 
             if new_h > 5 and new_w > 5:
-                img_r = img.resize((new_w, new_h), Image.LANCZOS)
+                img_r = char_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
                 x_off = x_center - new_w // 2
                 y_off = ground_y - bar_h + (bar_h - new_h)
                 strip.paste(img_r, (x_off, y_off), img_r)
@@ -375,8 +376,8 @@ def render_scaling_strip(
                 # Draw RED bounding box for content detection
                 if content:
                     top, left, bottom, right = content
-                    orig_h = img.height
-                    orig_w = img.width
+                    orig_h = char_img.height
+                    orig_w = char_img.width
 
                     # Scale content bbox to the resized image coordinates
                     scale_x = new_w / orig_w
@@ -525,7 +526,7 @@ def main() -> None:
         print(f"\n[{si + 1}/{len(SHOWS)}] {show['name']} ({show['wiki']})", flush=True)
         section = report.add_section(f"{show['name']} — {show['wiki']}")
 
-        chars_data: list[dict] = []
+        chars_data: list[dict[str, Any]] = []
         for name, height, wiki_page in show["characters"]:
             print(f"  {name} ({height}cm)...", end=" ", flush=True)
 

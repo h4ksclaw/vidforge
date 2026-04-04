@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import sys
 import time
+from typing import Any
 
 from vidforge.debug import ReportBuilder
 from vidforge.sources.fandom import SKIP_WORDS
@@ -44,7 +45,7 @@ def main() -> None:
     # ── Raw discovery (bypass skip words to see everything) ──────────────
     print(f"Searching {wiki} for height data...", flush=True)
 
-    raw_pages: list[dict[str, str | bool]] = []
+    raw_pages: list[dict[str, Any]] = []
     offset = 0
 
     while len(raw_pages) < max_pages:
