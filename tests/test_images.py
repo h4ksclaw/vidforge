@@ -80,7 +80,7 @@ class TestFetchAndProcessImage:
         # download_image returns an Image, but let's mock properly
         from PIL import Image as PILImage
 
-        mock_dl.return_value = PILImage.new("RGBA", (200, 800), (255, 0, 0, 255))
+        mock_dl.return_value = PILImage.new("RGBA", (400, 600), (255, 0, 0, 255))
         mock_rm.return_value = None  # bg removal fails
         item = Item(name="BgFail", value=100, image_url="https://example.com/bgfail.png")
 
@@ -95,8 +95,8 @@ class TestFetchAndProcessImage:
     ) -> None:
         from PIL import Image as PILImage
 
-        mock_dl.return_value = PILImage.new("RGBA", (200, 800), (255, 0, 0, 255))
-        mock_rm.return_value = PILImage.new("RGBA", (200, 800), (255, 0, 0, 255))
+        mock_dl.return_value = PILImage.new("RGBA", (400, 600), (255, 0, 0, 255))
+        mock_rm.return_value = PILImage.new("RGBA", (400, 600), (255, 0, 0, 255))
         mock_cr.return_value = 0.9  # too wide, face crop
         item = Item(name="Wide", value=100, image_url="https://example.com/wide.png")
 
@@ -112,8 +112,8 @@ class TestFetchAndProcessImage:
     ) -> None:
         from PIL import Image as PILImage
 
-        mock_dl.return_value = PILImage.new("RGBA", (200, 800), (255, 0, 0, 255))
-        mock_rm.return_value = PILImage.new("RGBA", (200, 800), (255, 0, 0, 255))
+        mock_dl.return_value = PILImage.new("RGBA", (400, 600), (255, 0, 0, 255))
+        mock_rm.return_value = PILImage.new("RGBA", (400, 600), (255, 0, 0, 255))
         mock_cr.return_value = 0.5  # narrow enough
         mock_hf.return_value = 0.3  # too short, cropped
         item = Item(name="Short", value=100, image_url="https://example.com/short.png")
@@ -136,8 +136,8 @@ class TestFetchAndProcessImage:
     ) -> None:
         from PIL import Image as PILImage
 
-        mock_dl.return_value = PILImage.new("RGBA", (200, 800), (255, 0, 0, 255))
-        mock_rm.return_value = PILImage.new("RGBA", (200, 800), (255, 0, 0, 255))
+        mock_dl.return_value = PILImage.new("RGBA", (400, 600), (255, 0, 0, 255))
+        mock_rm.return_value = PILImage.new("RGBA", (400, 600), (255, 0, 0, 255))
         mock_cr.return_value = 0.5  # narrow enough
         mock_hf.return_value = 0.8  # tall enough
         mock_put.return_value = "/fake/cache/path.png"
