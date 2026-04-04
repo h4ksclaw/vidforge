@@ -1,6 +1,7 @@
 """VidForge CLI — generate, upload, preview, dag commands."""
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 import typer
@@ -12,7 +13,7 @@ from vidforge.pipeline import run_pipeline
 app = typer.Typer(help="VidForge — modular video generation system")
 console = Console()
 
-_DAG_EXPORTERS: dict[str, object] = {
+_DAG_EXPORTERS: dict[str, Callable[[str | Path], Path]] = {
     "heights": _export_dag,
 }
 
