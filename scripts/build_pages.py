@@ -7,12 +7,30 @@ Add a new generator and the DAG page updates itself.
 
 import ast
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
 
 GITHUB_REPO = "h4ksclaw/vidforge"
 GENERATORS_DIR = "src/vidforge/generators"
+
+
+_SVG_XML_DECL_RE = re.compile(r"<\?xml[^?]*\?>\s*")
+_SVG_HTML_WRAPPER_RE = re.compile(r"<html[^>]*>.*?<body[^>]*>(.*)</body>\s*</html>", re.DOTALL)
+
+
+def _clean_svg(svg_text: str) -> str:
+    """Strip XML declaration and <html>/<body> wrappers from graphviz SVG output.
+
+    graphviz wraps SVG in <html><body>...</body></html> which causes XML
+    parser errors when embedded in an HTML page via DOMParser.
+    """
+    svg_text = _SVG_XML_DECL_RE.sub("", svg_text)
+    match = _SVG_HTML_WRAPPER_RE.search(svg_text)
+    if match:
+        svg_text = match.group(1)
+    return svg_text.strip()
 
 
 def extract_pipeline_metadata(pipeline_path: Path) -> dict:
@@ -143,13 +161,13 @@ def build_site(output_dir: Path, site_dir: Path, recipe_name: str = "VidForge") 
     if dags_dir.exists():
         for svg_file in dags_dir.glob("*.svg"):
             gen_name = svg_file.stem
-            dag_svgs[gen_name] = json.dumps(svg_file.read_text())
+            dag_svgs[gen_name] = json.dumps(_clean_svg(svg_file.read_text()))
 
     # Fall back to single dag.svg for backward compat
     if not dag_svgs:
         dag_file = output_dir / "dag.svg"
         if dag_file.exists():
-            dag_svgs["_default"] = json.dumps(dag_file.read_text())
+            dag_svgs["_default"] = json.dumps(_clean_svg(dag_file.read_text()))
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
