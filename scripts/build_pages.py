@@ -164,13 +164,13 @@ def build_site(output_dir: Path, site_dir: Path, recipe_name: str = "VidForge") 
     if dags_dir.exists():
         for svg_file in dags_dir.glob("*.svg"):
             gen_name = svg_file.stem
-            dag_svgs[gen_name] = json.dumps(_clean_svg(svg_file.read_text()))
+            dag_svgs[gen_name] = _clean_svg(svg_file.read_text())
 
     # Fall back to single dag.svg for backward compat
     if not dag_svgs:
         dag_file = output_dir / "dag.svg"
         if dag_file.exists():
-            dag_svgs["_default"] = json.dumps(_clean_svg(dag_file.read_text()))
+            dag_svgs["_default"] = _clean_svg(dag_file.read_text())
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
