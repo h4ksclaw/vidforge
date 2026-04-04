@@ -6,10 +6,15 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from vidforge.generators.heights.pipeline import _export_dag
 from vidforge.pipeline import run_pipeline
 
 app = typer.Typer(help="VidForge — modular video generation system")
 console = Console()
+
+_DAG_EXPORTERS: dict[str, object] = {
+    "heights": _export_dag,
+}
 
 
 @app.command()
@@ -54,11 +59,23 @@ def preview(
 
 @app.command()
 def dag(
-    recipe: Path = typer.Argument(..., help="Path to recipe YAML file"),
-    output: Path = typer.Option("dag.html", help="Output file"),
-    format: str = typer.Option("html", help="Export format (html/svg/png/dot/mermaid)"),
+    recipe: Path | None = typer.Argument(
+        None, help="Path to recipe YAML (optional, DAG-only mode if omitted)"
+    ),
+    output: Path = typer.Option("dag.svg", help="Output file"),
+    format: str = typer.Option("svg", help="Export format (svg)"),
+    generator: str = typer.Option("heights", help="Generator name (heights)"),
 ) -> None:
-    """Export the pipeline DAG visualization."""
-    console.print(f"[bold]Exporting DAG to {output}[/bold]")
-    run_pipeline(str(recipe), export_dag=str(output))
+    """Export the pipeline DAG visualization.
+
+    Works standalone (no recipe needed) — just generates the SVG from function metadata.
+    Pass a recipe to also run the full pipeline.
+    """
+    exporter = _DAG_EXPORTERS.get(generator)
+    if exporter is None:
+        console.print(f"[red]Unknown generator: {generator}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]Exporting DAG for '{generator}' to {output}[/bold]")
+    exporter(output)
     console.print(f"[green]✅ DAG exported to {output}[/green]")

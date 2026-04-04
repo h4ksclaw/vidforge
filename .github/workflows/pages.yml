@@ -1,16 +1,12 @@
 name: Deploy to GitHub Pages
 
 on:
+  push:
+    branches: [main]
   workflow_run:
     workflows: ["Generate Videos"]
     types: [completed]
     branches: [main]
-  push:
-    branches: [main]
-    paths:
-      - "src/vidforge/generators/**"
-      - "scripts/build_pages.py"
-      - "config/recipes/**"
 
 permissions:
   contents: read
@@ -25,8 +21,8 @@ concurrency:
 jobs:
   deploy:
     if: >-
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
-      || github.event_name == 'push'
+      github.event_name == 'push'
+      || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -45,7 +41,6 @@ jobs:
       - name: Install deps
         run: uv sync --extra dev
 
-      # For workflow_run triggers: download generated output (video + DAG SVG)
       - name: Download output artifact (from Generate Videos)
         if: github.event_name == 'workflow_run'
         env:
@@ -56,10 +51,14 @@ jobs:
             -n output \
             -D site-output || true
 
-      # For push triggers: build DAG-only site (no video output)
-      - name: Create minimal output dir (push trigger)
+      - name: Create output dir (push trigger)
         if: github.event_name == 'push'
         run: mkdir -p site-output
+
+      - name: Generate DAG SVGs for all generators
+        run: |
+          mkdir -p site-output/dags
+          uv run vidforge dag --generator heights --output site-output/dags/heights.svg
 
       - name: Build pages site
         run: python3 scripts/build_pages.py site-output site

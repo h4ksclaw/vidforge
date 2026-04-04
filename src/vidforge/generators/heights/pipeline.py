@@ -399,10 +399,39 @@ def render_video(
     return video_path
 
 
+# ─── DAG export (standalone, no pipeline execution) ────────────────────────
+
+
+def _export_dag(output_path: str | Path) -> Path:
+    """Export the Hamilton DAG visualization without executing the pipeline.
+
+    Useful for CI/docs — generates the SVG from function metadata alone.
+    """
+    this_module = importlib.import_module("vidforge.generators.heights.pipeline")
+
+    dr = (
+        driver.Builder()
+        .with_modules(this_module)
+        .enable_dynamic_execution(allow_experimental_mode=True)
+        .build()
+    )
+
+    output_path = Path(output_path)
+    if not str(output_path).endswith(".svg"):
+        output_path = output_path.with_suffix(".svg")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    dr.display_all_functions(
+        output_file_path=str(output_path),
+        render_kwargs={"format": "svg"},
+    )
+    return output_path
+
+
 # ─── Pipeline runner ─────────────────────────────────────────────────────────
 
 
-def run_pipeline(
+def _run_pipeline(
     recipe_path: str,
     skip_bg_removal: bool = False,
     export_dag: str | None = None,
@@ -417,19 +446,13 @@ def run_pipeline(
         driver.Builder()
         .with_config({"skip_bg_removal": skip_bg_removal})
         .with_modules(this_module)
-        .enable_dynamic_execution()
+        .enable_dynamic_execution(allow_experimental_mode=True)
         .with_local_executor(MultiThreadingExecutor(max_tasks=max_workers))
         .build()
     )
 
     if export_dag:
-        if not export_dag.endswith(".svg"):
-            export_dag += ".svg"
-        Path(export_dag).parent.mkdir(parents=True, exist_ok=True)
-        dr.display_all_functions(
-            output_file_path=export_dag,
-            render_kwargs={"format": "svg"},
-        )
+        export_dag = str(export_dag(export_dag))
 
     result = dr.execute(
         ["render_video"],

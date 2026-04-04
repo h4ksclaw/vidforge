@@ -137,11 +137,19 @@ def build_site(output_dir: Path, site_dir: Path, recipe_name: str = "VidForge") 
         raw = recipe_file.read_text().strip()
         recipe_name = raw.split("/")[-1].replace(".yaml", "")
 
-    # Read DAG SVG if present
-    dag_svg = ""
-    dag_file = output_dir / "dag.svg"
-    if dag_file.exists():
-        dag_svg = json.dumps(dag_file.read_text())
+    # Read DAG SVGs for each generator
+    dags_dir = output_dir / "dags"
+    dag_svgs: dict[str, str] = {}
+    if dags_dir.exists():
+        for svg_file in dags_dir.glob("*.svg"):
+            gen_name = svg_file.stem
+            dag_svgs[gen_name] = json.dumps(svg_file.read_text())
+
+    # Fall back to single dag.svg for backward compat
+    if not dag_svgs:
+        dag_file = output_dir / "dag.svg"
+        if dag_file.exists():
+            dag_svgs["_default"] = json.dumps(dag_file.read_text())
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -249,7 +257,7 @@ header h1 a:hover {{ color: #58a6ff; }}
   <button id="zoom-fit">\u2297</button>
 </div>
 <script>
-const DAG_SVG = {dag_svg if dag_svg else "null"};
+const DAG_SVGS = {json.dumps(dag_svgs)};
 const GENERATORS = {generators_json};
 const GEN_NAMES = {gen_names_json};
 const GITHUB_BASE = "https://github.com/{GITHUB_REPO}/blob/main/";
@@ -284,14 +292,15 @@ function renderDAG() {{
   const fnMeta = gen.metadata;
   const pipelinePath = gen.path;
   const fnMetaJson = JSON.stringify(fnMeta);
+  const dagSvg = DAG_SVGS[currentGen] || DAG_SVGS["_default"] || null;
 
-  if (!DAG_SVG) {{
+  if (!dagSvg) {{
     container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#484f58;font-size:1.2rem">No DAG SVG available</div>';
     document.getElementById('node-count').textContent = Object.keys(fnMeta).length + ' nodes';
     return;
   }}
 
-  const svgEl = new DOMParser().parseFromString(DAG_SVG, 'image/svg+xml').documentElement;
+  const svgEl = new DOMParser().parseFromString(dagSvg, 'image/svg+xml').documentElement;
   svgEl.style.background = 'transparent';
   svgEl.querySelectorAll('polygon[fill="white"]').forEach(p => p.setAttribute('fill', 'transparent'));
   svgEl.querySelectorAll('polygon[fill="black"]').forEach(p => p.setAttribute('fill', '#8b949e'));

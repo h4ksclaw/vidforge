@@ -10,7 +10,7 @@ from typing import Any
 
 from vidforge.generators import register
 from vidforge.generators.base import BaseGenerator
-from vidforge.generators.heights.pipeline import run_pipeline
+from vidforge.generators.heights.pipeline import _run_pipeline
 
 __all__ = ["HeightsGenerator"]
 
@@ -45,7 +45,7 @@ class HeightsGenerator(BaseGenerator):
         if recipe_path is None:
             raise ValueError("recipe_path is required for heights generator")
 
-        return run_pipeline(
+        return _run_pipeline(
             recipe_path=str(recipe_path),
             skip_bg_removal=skip_bg_removal,
             export_dag=str(export_dag) if export_dag else None,
