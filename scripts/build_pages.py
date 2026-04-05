@@ -110,7 +110,7 @@ def discover_generators(repo_root: Path) -> dict[str, dict]:
         pipeline_file = child / "pipeline.py"
         if pipeline_file.exists():
             generators[child.name] = {
-                "path": str(pipeline_file),
+                "path": str(pipeline_file.relative_to(repo_root)),
                 "metadata": extract_pipeline_metadata(pipeline_file),
             }
     return generators
@@ -136,7 +136,7 @@ def build_site(output_dir: Path, site_dir: Path, recipe_name: str = "VidForge") 
         legacy = repo_root / "src/vidforge/pipeline.py"
         if legacy.exists():
             generators["legacy"] = {
-                "path": str(legacy),
+                "path": str(legacy.relative_to(repo_root)),
                 "metadata": extract_pipeline_metadata(legacy),
             }
 
