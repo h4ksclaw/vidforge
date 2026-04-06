@@ -36,8 +36,7 @@ from vidforge.assets.bg_remove import height_fill
 from vidforge.assets.bg_remove import remove_background
 from vidforge.assets.images import download_image
 from vidforge.assets.images import fetch_and_process_image
-from vidforge.debug import ReportBuilder
-from vidforge.debug import upload_file
+from vidforge.debug import DebugScript
 from vidforge.models import Item
 from vidforge.sources.fandom import find_best_image
 
@@ -503,134 +502,137 @@ def render_scaling_strip(
     return out_path, scale_info
 
 
+class ScalingDebug(DebugScript):
+    """Debug scaling across shows — uses actual pipeline code.
+
+    Output: HTML report with scaled strips, content detection overlays,
+    per-character metrics, uploaded to s.h4ks.com.
+    """
+
+    def run(self, limit: int | None = None) -> str | None:
+        shows = SHOWS[:limit] if limit else SHOWS
+        report = self.report(
+            f"Scaling Debug — {len(shows)} Shows",
+            "Live test: height extraction + image scaling for visual verification",
+        )
+        report.add_meta("shows", str(len(shows)))
+        report.add_meta("strip_height", f"{STRIP_HEIGHT}px")
+        report.add_meta("available_height", f"{AVAILABLE_H}px")
+        report.add_meta("scale_factor", f"{SCALE_FACTOR} ({SCALE_FACTOR * 100:.0f}%)")
+
+        total_chars = 0
+        total_with_img = 0
+        total_without_img = 0
+
+        for si, show in enumerate(shows):
+            print(f"\n[{si + 1}/{len(SHOWS)}] {show['name']} ({show['wiki']})", flush=True)
+            section = report.add_section(f"{show['name']} — {show['wiki']}")
+
+            chars_data: list[dict[str, Any]] = []
+            for name, height, wiki_page in show["characters"]:
+                print(f"  {name} ({height}cm)...", end=" ", flush=True)
+
+                # Use the ACTUAL pipeline: find_best_image → fetch_and_process_image
+                img_url = find_best_image(show["wiki"], wiki_page)
+                img_path = None
+                fail_reason = None
+
+                if not img_url:
+                    fail_reason = "no image found (scoring returned None)"
+                else:
+                    item = Item(name=name, value=height, image_url=img_url)
+                    processed = fetch_and_process_image(item)
+                    if processed.image_path:
+                        img_path = processed.image_path
+                    else:
+                        fail_reason = diagnose_failure(show["wiki"], wiki_page, name, img_url)
+
+                has_img = img_path is not None
+                if has_img:
+                    total_with_img += 1
+                    print("✓", flush=True)
+                else:
+                    total_without_img += 1
+                    print(f"— {fail_reason}", flush=True)
+
+                chars_data.append(
+                    {
+                        "name": name,
+                        "height_cm": height,
+                        "img_path": img_path,
+                        "fail_reason": fail_reason,
+                    }
+                )
+                total_chars += 1
+                time.sleep(0.3)
+
+            # Render scaling strip
+            print("  Rendering strip...", end=" ", flush=True)
+            strip_path, scale_info = render_scaling_strip(chars_data, show["name"])
+
+            # Upload strip
+            strip_url = self.upload_asset(strip_path)
+            if strip_url:
+                section.add_full_image(
+                    strip_url, f"{show['name']} — scaled short to tall (red = content detection)"
+                )
+            print("done", flush=True)
+
+            # Add scale info table — shows every character with pass/fail and why
+            scale_rows = [
+                ["Name", "Height", "Bar(px)", "Fill%", "CR%", "Status"],
+            ]
+            for c in scale_info["chars"]:
+                h_val = c["height_cm"]
+                h_label = f"{h_val / 100:.1f}m" if h_val >= 500 else f"{h_val}cm"
+                fill = c.get("content_fill", 0)
+                cr = c.get("content_ratio", 0)
+
+                if c["has_image"]:
+                    fill_flag = "" if fill >= 0.55 else " ⚠️"
+                    cr_flag = "" if cr <= 0.75 else " ⚠️"
+                    status = f"✅ fill={fill:.0%}{fill_flag} cr={cr:.0%}{cr_flag}"
+                else:
+                    status = f"❌ {c.get('fail_reason', 'unknown')[:40]}"
+
+                scale_rows.append(
+                    [
+                        c["name"],
+                        h_label,
+                        str(c["bar_h"]) if c["has_image"] else "—",
+                        f"{fill:.0%}" if c["has_image"] else "—",
+                        f"{cr:.0%}" if c["has_image"] else "—",
+                        status,
+                    ]
+                )
+
+            section.add_table(scale_rows[0], scale_rows[1:])
+            section.add_stat("max_height", f"{scale_info['max_height_cm']}cm")
+            section.add_stat("scale", scale_info["scale_factor"])
+            section.add_stat("ground_y", f"{scale_info['ground_y']}px")
+
+            time.sleep(0.5)
+            gc.collect()
+
+        report.add_summary(
+            {
+                "Shows tested": str(len(SHOWS)),
+                "Total characters": str(total_chars),
+                "With images": str(total_with_img),
+                "Without images": str(total_without_img),
+            }
+        )
+
+        print(f"\n{'=' * 50}", flush=True)
+        print("Uploading report...", flush=True)
+        return report.upload()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Debug scaling across shows")
     parser.add_argument("--limit", type=int, default=None, help="Test only first N shows")
     args = parser.parse_args()
-
-    shows = SHOWS[: args.limit] if args.limit else SHOWS
-    report = ReportBuilder(
-        f"Scaling Debug — {len(shows)} Shows",
-        "Live test: height extraction + image scaling for visual verification",
-    )
-    report.add_meta("shows", str(len(shows)))
-    report.add_meta("strip_height", f"{STRIP_HEIGHT}px")
-    report.add_meta("available_height", f"{AVAILABLE_H}px")
-    report.add_meta("scale_factor", f"{SCALE_FACTOR} ({SCALE_FACTOR * 100:.0f}%)")
-
-    total_chars = 0
-    total_with_img = 0
-    total_without_img = 0
-
-    for si, show in enumerate(shows):
-        print(f"\n[{si + 1}/{len(SHOWS)}] {show['name']} ({show['wiki']})", flush=True)
-        section = report.add_section(f"{show['name']} — {show['wiki']}")
-
-        chars_data: list[dict[str, Any]] = []
-        for name, height, wiki_page in show["characters"]:
-            print(f"  {name} ({height}cm)...", end=" ", flush=True)
-
-            # Use the ACTUAL pipeline: find_best_image → fetch_and_process_image
-            # This runs rembg + quality filters — same code path as the real pipeline
-            img_url = find_best_image(show["wiki"], wiki_page)
-            img_path = None
-            fail_reason = None
-
-            if not img_url:
-                fail_reason = "no image found (scoring returned None)"
-            else:
-                item = Item(name=name, value=height, image_url=img_url)
-                processed = fetch_and_process_image(item)
-                if processed.image_path:
-                    img_path = processed.image_path
-                else:
-                    # Diagnose why it failed — download raw and check each step
-                    fail_reason = diagnose_failure(show["wiki"], wiki_page, name, img_url)
-
-            has_img = img_path is not None
-            if has_img:
-                total_with_img += 1
-                print("✓", flush=True)
-            else:
-                total_without_img += 1
-                print(f"— {fail_reason}", flush=True)
-
-            chars_data.append(
-                {
-                    "name": name,
-                    "height_cm": height,
-                    "img_path": img_path,
-                    "fail_reason": fail_reason,
-                }
-            )
-            total_chars += 1
-            time.sleep(0.3)
-
-        # Render scaling strip
-        print("  Rendering strip...", end=" ", flush=True)
-        strip_path, scale_info = render_scaling_strip(chars_data, show["name"])
-
-        # Upload strip
-        strip_url = upload_file(strip_path)
-        if strip_url:
-            section.add_full_image(
-                strip_url, f"{show['name']} — scaled short to tall (red = content detection)"
-            )
-        print("done", flush=True)
-
-        # Add scale info table — shows every character with pass/fail and why
-        scale_rows = [
-            ["Name", "Height", "Bar(px)", "Fill%", "CR%", "Status"],
-        ]
-        for c in scale_info["chars"]:
-            h_val = c["height_cm"]
-            h_label = f"{h_val / 100:.1f}m" if h_val >= 500 else f"{h_val}cm"
-            fill = c.get("content_fill", 0)
-            cr = c.get("content_ratio", 0)
-
-            if c["has_image"]:
-                fill_flag = "" if fill >= 0.55 else " ⚠️"
-                cr_flag = "" if cr <= 0.75 else " ⚠️"
-                status = f"✅ fill={fill:.0%}{fill_flag} cr={cr:.0%}{cr_flag}"
-            else:
-                status = f"❌ {c.get('fail_reason', 'unknown')[:40]}"
-
-            scale_rows.append(
-                [
-                    c["name"],
-                    h_label,
-                    str(c["bar_h"]) if c["has_image"] else "—",
-                    f"{fill:.0%}" if c["has_image"] else "—",
-                    f"{cr:.0%}" if c["has_image"] else "—",
-                    status,
-                ]
-            )
-
-        section.add_table(scale_rows[0], scale_rows[1:])
-        section.add_stat("max_height", f"{scale_info['max_height_cm']}cm")
-        section.add_stat("scale", scale_info["scale_factor"])
-        section.add_stat("ground_y", f"{scale_info['ground_y']}px")
-
-        time.sleep(0.5)
-        gc.collect()
-
-    report.add_summary(
-        {
-            "Shows tested": str(len(SHOWS)),
-            "Total characters": str(total_chars),
-            "With images": str(total_with_img),
-            "Without images": str(total_without_img),
-        }
-    )
-
-    print(f"\n{'=' * 50}", flush=True)
-    print("Uploading report...", flush=True)
-    url = report.upload()
-    if url:
-        print(f"Report: {url}")
-    else:
-        local = report.save("/tmp/vidforge_debug_scaling.html")
-        print(f"Local: {local}")
+    ScalingDebug()(limit=args.limit)
 
 
 if __name__ == "__main__":
