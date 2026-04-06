@@ -20,7 +20,6 @@ from vidforge.sources.fandom import BAD_IMAGE_KEYWORDS
 from vidforge.sources.fandom import _score_image_url
 from vidforge.sources.fandom import get_image_url
 from vidforge.sources.fandom import get_page_images
-from vidforge.sources.jikan import find_character_image as jikan_find
 
 HEADERS = {"User-Agent": "VidForge/0.1 (github.com/h4ksclaw/vidforge)"}
 
@@ -168,13 +167,11 @@ def gather_candidates(
     except (ImportError, OSError):
         pass
 
-    # 3. Jikan / MAL — single best match
-    try:
-        jikan_url = jikan_find(name, show=show_name)
-        if jikan_url and not any(c["url"] == jikan_url for c in candidates):
-            candidates.append({"url": jikan_url, "source": "jikan", "source_score": 2.0})
-    except (ImportError, OSError):
-        pass
+    # 3. Jikan / MAL — disabled (returns wrong-show results too often)
+    # try:
+    #     jikan_url = jikan_find(name, show=show_name)
+    #     if jikan_url and not any(c["url"] == jikan_url for c in candidates):
+    #         candidates.append({"url": jikan_url, "source": "jikan", "source_score": 2.0})
 
     return candidates
 
