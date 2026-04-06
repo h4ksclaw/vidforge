@@ -509,7 +509,7 @@ class ScalingDebug(DebugScript):
     per-character metrics, uploaded to s.h4ks.com.
     """
 
-    def run(self, limit: int | None = None) -> str | None:
+    def run(self, limit: int | None = None) -> str | None:  # type: ignore[override]
         shows = SHOWS[:limit] if limit else SHOWS
         report = self.report(
             f"Scaling Debug — {len(shows)} Shows",

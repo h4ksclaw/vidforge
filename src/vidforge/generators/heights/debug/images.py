@@ -57,7 +57,7 @@ class ImagesDebug(DebugScript):
     Output: HTML report with scored candidates, bg removal results, quality checks.
     """
 
-    def run(self, wiki: str, page: str, max_inspect: int = 10) -> str | None:
+    def run(self, wiki: str, page: str, max_inspect: int = 10) -> str | None:  # type: ignore[override]
         name_parts = page.lower().replace("_", " ").split()
 
         report = self.report(

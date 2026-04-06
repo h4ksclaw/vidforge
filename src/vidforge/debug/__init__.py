@@ -32,6 +32,8 @@ class DebugScript:
 
     Enforces the pattern: build a ReportBuilder, populate it, upload to s.h4ks.com.
     Subclass and implement run(). The report is auto-uploaded when run() returns.
+
+    Subclasses should override run() with typed keyword arguments.
     """
 
     def report(self, title: str, description: str = "") -> ReportBuilder:
@@ -43,8 +45,11 @@ class DebugScript:
         """Upload a local file to s.h4ks.com and return the URL."""
         return upload_file(path)
 
-    def run(self, **kwargs: Any) -> str | None:
-        """Implement in subclasses. Build self.report(), populate sections, return URL."""
+    def run(self, **kwargs: Any) -> str | None:  # pragma: no cover
+        """Implement in subclasses. Build self.report(), populate sections, return URL.
+
+        Subclasses override with specific keyword args (e.g. limit, wiki, page).
+        """
         raise NotImplementedError
 
     def __call__(self, **kwargs: Any) -> str | None:

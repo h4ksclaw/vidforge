@@ -68,7 +68,7 @@ class HeightDebug(DebugScript):
     Output: HTML report showing raw wikitext fields vs parsed values.
     """
 
-    def run(self, wiki: str, pages: list[str] | None = None) -> str | None:
+    def run(self, wiki: str, pages: list[str] | None = None) -> str | None:  # type: ignore[override]
         if not pages:
             pages = []
 
