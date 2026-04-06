@@ -35,12 +35,9 @@ from vidforge.assets.bg_remove import content_ratio
 from vidforge.assets.bg_remove import height_fill
 from vidforge.assets.bg_remove import remove_background
 from vidforge.assets.images import download_image
-from vidforge.assets.images import fetch_and_process_image
+from vidforge.assets.images import fetch_best_image
 from vidforge.debug import DebugScript
 from vidforge.models import Item
-from vidforge.sources.anilist import find_character_image as anilist_find
-from vidforge.sources.fandom import find_best_image
-from vidforge.sources.jikan import find_character_image as jikan_find
 
 # Pipeline scaling constants (from vidforge.pipeline.render_strip)
 MARGIN_BOTTOM = 130
@@ -534,38 +531,14 @@ class ScalingDebug(DebugScript):
             for name, height, wiki_page in show["characters"]:
                 print(f"  {name} ({height}cm)...", end=" ", flush=True)
 
-                # Try all three sources: Fandom → AniList → Jikan
-                img_url = None
-                source_used = None
-                fail_reason = None
+                # Try all sources: Fandom (top 3) → AniList → Jikan
+                # Download + bg remove all candidates, pick best quality score
+                item = Item(name=name, value=height)
+                result = fetch_best_image(item, wiki=show["wiki"], wiki_page=wiki_page)
 
-                # 1. Fandom wiki (best quality — multiple images scored)
-                img_url = find_best_image(show["wiki"], wiki_page)
-                if img_url:
-                    source_used = "fandom"
-
-                # 2. AniList (clean profile renders)
-                if not img_url:
-                    img_url = anilist_find(name)
-                    if img_url:
-                        source_used = "anilist"
-
-                # 3. Jikan / MAL (profile pictures)
-                if not img_url:
-                    img_url = jikan_find(name)
-                    if img_url:
-                        source_used = "jikan"
-
-                img_path = None
-                if not img_url:
-                    fail_reason = "no image from any source"
-                else:
-                    item = Item(name=name, value=height, image_url=img_url)
-                    processed = fetch_and_process_image(item)
-                    if processed.image_path:
-                        img_path = processed.image_path
-                    else:
-                        fail_reason = diagnose_failure(show["wiki"], wiki_page, name, img_url)
+                img_path = result.image_path
+                source_used = result.image_path.split("/")[-2] if result.image_path else None
+                fail_reason = "no image passed quality from any source" if not img_path else None
 
                 has_img = img_path is not None
                 if has_img:
