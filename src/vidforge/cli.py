@@ -1,6 +1,8 @@
-"""VidForge CLI — generate, upload, preview, dag commands."""
+"""VidForge CLI — generate, upload, preview, dag, debug commands."""
 
 import shutil
+import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -12,6 +14,61 @@ from vidforge.pipeline import run_pipeline
 
 app = typer.Typer(help="VidForge — modular video generation system")
 console = Console()
+
+# ─── Debug sub-commands ─────────────────────────────────────────────────────
+
+
+debug_app = typer.Typer(help="Debug tools — test pipeline stages and generate visual reports")
+app.add_typer(debug_app, name="debug")
+
+
+def _run_debug_module(module: str, args: list[str]) -> None:
+    """Run a debug script in a subprocess to avoid loading heavy deps in the CLI process."""
+    result = subprocess.run(
+        [sys.executable, "-m", module, *args],
+        capture_output=False,
+    )
+    sys.exit(result.returncode)
+
+
+@debug_app.command(name="scaling")
+def debug_scaling(
+    limit: int = typer.Option(10, help="Test only first N shows"),
+) -> None:
+    """Run the scaling debug — fetch real images, render scaled strips with content detection overlays.
+
+    Output: HTML report uploaded to s.h4ks.com with:
+    - Per-show scaling strips (red = content bbox, green = content height, orange = target height)
+    - Per-character pass/fail with quality metrics
+    - Summary statistics
+    """
+    _run_debug_module("vidforge.generators.heights.debug.scaling", ["--limit", str(limit)])
+
+
+@debug_app.command(name="heights")
+def debug_heights(
+    wiki: str = typer.Argument(..., help="Fandom wiki domain (e.g. dragonball.fandom.com)"),
+    pages: list[str] = typer.Argument(..., help="Character wiki page names"),
+) -> None:
+    """Test height extraction against real wiki data and edge cases.
+
+    Output: HTML report showing raw wikitext fields vs parsed values.
+    """
+    _run_debug_module("vidforge.generators.heights.debug.height", [wiki, *pages])
+
+
+@debug_app.command(name="images")
+def debug_images(
+    wiki: str = typer.Argument(..., help="Fandom wiki domain"),
+    page: str = typer.Argument(..., help="Character wiki page name"),
+    max_inspect: int = typer.Option(10, help="Max images to download and inspect"),
+) -> None:
+    """Test image scoring and quality filters for a single character.
+
+    Output: HTML report with scored candidates, bg removal results, and quality checks.
+    """
+    _run_debug_module("vidforge.generators.heights.debug.images", [wiki, page, str(max_inspect)])
+
 
 _DAG_EXPORTERS: dict[str, Callable[[str | Path], Path]] = {
     "heights": _export_dag,
