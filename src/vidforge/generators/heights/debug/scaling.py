@@ -38,7 +38,9 @@ from vidforge.assets.images import download_image
 from vidforge.assets.images import fetch_and_process_image
 from vidforge.debug import DebugScript
 from vidforge.models import Item
+from vidforge.sources.anilist import find_character_image as anilist_find
 from vidforge.sources.fandom import find_best_image
+from vidforge.sources.jikan import find_character_image as jikan_find
 
 # Pipeline scaling constants (from vidforge.pipeline.render_strip)
 MARGIN_BOTTOM = 130
@@ -532,13 +534,31 @@ class ScalingDebug(DebugScript):
             for name, height, wiki_page in show["characters"]:
                 print(f"  {name} ({height}cm)...", end=" ", flush=True)
 
-                # Use the ACTUAL pipeline: find_best_image → fetch_and_process_image
-                img_url = find_best_image(show["wiki"], wiki_page)
-                img_path = None
+                # Try all three sources: Fandom → AniList → Jikan
+                img_url = None
+                source_used = None
                 fail_reason = None
 
+                # 1. Fandom wiki (best quality — multiple images scored)
+                img_url = find_best_image(show["wiki"], wiki_page)
+                if img_url:
+                    source_used = "fandom"
+
+                # 2. AniList (clean profile renders)
                 if not img_url:
-                    fail_reason = "no image found (scoring returned None)"
+                    img_url = anilist_find(name)
+                    if img_url:
+                        source_used = "anilist"
+
+                # 3. Jikan / MAL (profile pictures)
+                if not img_url:
+                    img_url = jikan_find(name)
+                    if img_url:
+                        source_used = "jikan"
+
+                img_path = None
+                if not img_url:
+                    fail_reason = "no image from any source"
                 else:
                     item = Item(name=name, value=height, image_url=img_url)
                     processed = fetch_and_process_image(item)
@@ -561,6 +581,7 @@ class ScalingDebug(DebugScript):
                         "height_cm": height,
                         "img_path": img_path,
                         "fail_reason": fail_reason,
+                        "source": source_used,
                     }
                 )
                 total_chars += 1
@@ -580,13 +601,14 @@ class ScalingDebug(DebugScript):
 
             # Add scale info table — shows every character with pass/fail and why
             scale_rows = [
-                ["Name", "Height", "Bar(px)", "Fill%", "CR%", "Status"],
+                ["Name", "Height", "Source", "Bar(px)", "Fill%", "CR%", "Status"],
             ]
             for c in scale_info["chars"]:
                 h_val = c["height_cm"]
                 h_label = f"{h_val / 100:.1f}m" if h_val >= 500 else f"{h_val}cm"
                 fill = c.get("content_fill", 0)
                 cr = c.get("content_ratio", 0)
+                source = c.get("source", "?")
 
                 if c["has_image"]:
                     fill_flag = "" if fill >= 0.55 else " ⚠️"
@@ -599,6 +621,7 @@ class ScalingDebug(DebugScript):
                     [
                         c["name"],
                         h_label,
+                        source or "—",
                         str(c["bar_h"]) if c["has_image"] else "—",
                         f"{fill:.0%}" if c["has_image"] else "—",
                         f"{cr:.0%}" if c["has_image"] else "—",
