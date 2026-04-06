@@ -25,6 +25,15 @@ from vidforge.sources.jikan import find_character_image as jikan_find
 HEADERS = {"User-Agent": "VidForge/0.1 (github.com/h4ksclaw/vidforge)"}
 
 
+def _make_thumbnail(img: Image.Image, max_h: int = 200) -> Image.Image | None:
+    """Create a small thumbnail for debug report uploads."""
+    if not img or img.height < 10:
+        return None
+    ratio = max_h / img.height
+    new_w = int(img.width * ratio)
+    return img.resize((new_w, max_h), Image.LANCZOS)
+
+
 @dataclass
 class CandidateResult:
     """Result of evaluating a single image candidate."""
@@ -251,6 +260,13 @@ def fetch_best_image_debug(
 
         cr_result.aspect_ratio = round(img.width / img.height, 3) if img.height else 99.0
 
+        # Save raw thumbnail for debug reports
+        raw_thumb = _make_thumbnail(img, max_h=200)
+        if raw_thumb:
+            raw_thumb_path = f"/tmp/vf_cand_{item.name.replace(' ', '_')}_{len(evaluated)}.png"
+            raw_thumb.save(raw_thumb_path)
+            cr_result.raw_url = raw_thumb_path
+
         # Background removal
         if not skip_bg_removal:
             processed = remove_background(img)
@@ -259,6 +275,14 @@ def fetch_best_image_debug(
                 evaluated.append(cr_result)
                 continue
             img = processed
+            # Save processed thumbnail for debug reports
+            proc_thumb = _make_thumbnail(img, max_h=200)
+            if proc_thumb:
+                proc_thumb_path = (
+                    f"/tmp/vf_cand_{item.name.replace(' ', '_')}_{len(evaluated)}_proc.png"
+                )
+                proc_thumb.save(proc_thumb_path)
+                cr_result.processed_url = proc_thumb_path
 
         # Quality metrics
         hf = height_fill(img)

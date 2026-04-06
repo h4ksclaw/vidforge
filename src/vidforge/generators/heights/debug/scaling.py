@@ -568,18 +568,34 @@ class ScalingDebug(DebugScript):
                             "winner", f"{winner.source} (q={winner.quality_score:.2f})"
                         )
 
+                    # Upload thumbnails and show candidate images
+                    for c in result.candidates:
+                        label_parts = [c.source]
+                        if c.status == "winner":
+                            label_parts.append("🏆")
+                        if c.reject_reason:
+                            label_parts.append(c.reject_reason[:30])
+                        label = " ".join(label_parts)
+
+                        # Upload processed (bg-removed) thumbnail if available
+                        if c.processed_url:
+                            url = self.upload_asset(c.processed_url)
+                            if url:
+                                char_section.add_image(url, label)
+                        elif c.raw_url:
+                            url = self.upload_asset(c.raw_url)
+                            if url:
+                                char_section.add_image(url, label)
+
+                    # Also add the metrics table below images
                     cand_rows = [
-                        ["Source", "SrcScore", "QScore", "HF", "CR", "AR", "Status"],
+                        ["Source", "Src", "Q", "HF", "CR", "AR", "Status"],
                     ]
                     for c in result.candidates:
                         icon = {"winner": "🏆", "accepted": "✅", "rejected": "❌"}.get(
                             c.status, "?"
                         )
-                        status_text = c.status
-                        if c.reject_reason:
-                            status_text = f"{icon} {c.reject_reason}"
-                        else:
-                            status_text = f"{icon} {c.status}"
+                        reason = c.reject_reason if c.reject_reason else c.status
                         cand_rows.append(
                             [
                                 c.source,
@@ -588,7 +604,7 @@ class ScalingDebug(DebugScript):
                                 f"{c.height_fill:.2f}",
                                 f"{c.content_ratio:.2f}",
                                 f"{c.aspect_ratio:.2f}",
-                                status_text,
+                                f"{icon} {reason}",
                             ]
                         )
                     char_section.add_table(cand_rows[0], cand_rows[1:])
