@@ -71,13 +71,14 @@ def download_image(url: str) -> Image.Image | None:
         return None
 
 
-def _quality_score(img: Image.Image) -> float:
+def _quality_score(img: Image.Image, source_score: float = 1.0) -> float:
     """Score a processed (bg-removed) image for full-body character suitability.
 
     Higher = better. Considers:
-    - Height fill (0.55-0.95 is ideal, penalize too short or too tight)
-    - Content ratio (0.3-0.7 is ideal, penalize too wide or too narrow)
-    - Aspect ratio (0.3-0.8 is ideal for standing poses)
+    - Height fill (0.7-0.95 is ideal — character fills most of the frame vertically)
+    - Content ratio (0.3-0.75 is ideal — character has reasonable width without being a crop)
+    - Aspect ratio (0.3-0.7 is ideal — portrait standing pose)
+    - Source score bonus (fandom "render" > generic fandom > anilist > jikan)
 
     Returns 0.0 to 1.0.
     """
@@ -88,34 +89,48 @@ def _quality_score(img: Image.Image) -> float:
     cr = content_ratio(img)
     aspect = img.width / img.height if img.height else 99.0
 
-    # Height fill: sweet spot is 0.6-0.9
-    if 0.6 <= hf <= 0.9:
+    # Height fill: sweet spot is 0.7-0.95 (character fills most of the frame)
+    if 0.7 <= hf <= 0.95:
         hf_score = 1.0
-    elif 0.55 <= hf <= 0.95:
-        hf_score = 0.8
-    elif 0.4 <= hf <= 1.0:
-        hf_score = 0.4
+    elif 0.55 <= hf < 0.7:
+        hf_score = 0.6  # cropped but usable
+    elif 0.95 < hf <= 1.0:
+        hf_score = 0.9  # very tight crop, still often full body
     else:
         hf_score = 0.0
 
-    # Content ratio: sweet spot is 0.3-0.7 (character takes up reasonable width)
-    if 0.3 <= cr <= 0.7:
+    # Content ratio: sweet spot is 0.3-0.75
+    # Wider is OK for full-body poses, very narrow is fine for slim characters
+    if 0.3 <= cr <= 0.75:
         cr_score = 1.0
-    elif 0.2 <= cr <= 0.8:
-        cr_score = 0.7
+    elif 0.75 < cr <= 0.9:
+        cr_score = 0.7  # wide character or slightly tight crop, still often full body
+    elif 0.15 <= cr < 0.3:
+        cr_score = 0.6  # very slim character
+    elif cr > 0.9:
+        cr_score = 0.3  # likely a face/torso crop
     else:
-        cr_score = 0.2
+        cr_score = 0.1
 
-    # Aspect ratio: sweet spot is 0.3-0.8 (portrait-ish)
-    if 0.3 <= aspect <= 0.8:
+    # Aspect ratio: sweet spot is 0.3-0.7 (portrait standing pose)
+    if 0.3 <= aspect <= 0.7:
         ar_score = 1.0
-    elif 0.2 <= aspect <= 1.0:
-        ar_score = 0.6
+    elif 0.7 < aspect <= 0.9:
+        ar_score = 0.7  # wider but still portrait
+    elif 0.2 <= aspect < 0.3:
+        ar_score = 0.5  # very narrow
+    elif 0.9 < aspect <= 1.2:
+        ar_score = 0.3  # square-ish, often a crop
     else:
         ar_score = 0.1
 
+    # Source score bonus: prefer images from sources that scored well on filename
+    # fandom "render" (5.0) > fandom generic (1.0) > anilist (3.0) > jikan (2.0)
+    # Normalize to 0-1 bonus range
+    source_bonus = min(source_score / 5.0, 1.0) * 0.15  # max 0.15 bonus
+
     # Weighted combination
-    return hf_score * 0.45 + cr_score * 0.35 + ar_score * 0.2
+    return hf_score * 0.40 + cr_score * 0.30 + ar_score * 0.15 + source_bonus
 
 
 def gather_candidates(
@@ -289,7 +304,7 @@ def fetch_best_image_debug(
         cr = content_ratio(img)
         cr_result.height_fill = round(hf, 3)
         cr_result.content_ratio = round(cr, 3)
-        cr_result.quality_score = round(_quality_score(img), 3)
+        cr_result.quality_score = round(_quality_score(img, candidate["source_score"]), 3)
 
         # Quality filter: height fill
         if hf < min_height_fill:
