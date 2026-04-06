@@ -1,6 +1,8 @@
 """Image fetching, caching, and processing pipeline."""
 
 import io
+from dataclasses import dataclass
+from dataclasses import field
 from typing import Any
 
 import httpx
@@ -21,6 +23,31 @@ from vidforge.sources.fandom import get_page_images
 from vidforge.sources.jikan import find_character_image as jikan_find
 
 HEADERS = {"User-Agent": "VidForge/0.1 (github.com/h4ksclaw/vidforge)"}
+
+
+@dataclass
+class CandidateResult:
+    """Result of evaluating a single image candidate."""
+
+    url: str
+    source: str
+    source_score: float
+    status: str  # "winner", "accepted", "rejected"
+    reject_reason: str = ""
+    quality_score: float = 0.0
+    height_fill: float = 0.0
+    content_ratio: float = 0.0
+    aspect_ratio: float = 0.0
+    raw_url: str = ""  # uploaded thumbnail of original
+    processed_url: str = ""  # uploaded thumbnail of bg-removed
+
+
+@dataclass
+class FetchResult:
+    """Result of fetch_best_image with full candidate evaluation details."""
+
+    item: Item
+    candidates: list[CandidateResult] = field(default_factory=list)
 
 
 def download_image(url: str) -> Image.Image | None:
@@ -165,56 +192,108 @@ def fetch_best_image(
 
     Checks cache first. Returns item with image_path set if successful.
     """
+    result = fetch_best_image_debug(
+        item,
+        wiki=wiki,
+        wiki_page=wiki_page,
+        skip_bg_removal=skip_bg_removal,
+        min_height_fill=min_height_fill,
+    )
+    return result.item
+
+
+def fetch_best_image_debug(
+    item: Item,
+    wiki: str = "",
+    wiki_page: str = "",
+    skip_bg_removal: bool = False,
+    min_height_fill: float = 0.55,
+) -> FetchResult:
+    """Fetch best image with full candidate evaluation details for debugging.
+
+    Returns FetchResult with per-candidate status, scores, and reject reasons.
+    """
     if not item.image_url:
-        # No URL provided — gather candidates from all sources
         candidates = gather_candidates(item.name, wiki=wiki, wiki_page=wiki_page)
     else:
-        # Single URL provided — just process it
         candidates = [{"url": item.image_url, "source": "direct", "source_score": 1.0}]
 
-    if not candidates:
-        return item
+    fetch_result = FetchResult(item=item)
 
-    # Check cache with all candidate URLs as key
+    if not candidates:
+        return fetch_result
+
+    # Check cache
     key = item_cache_key(item)
     cached = get_cached(key)
     if cached:
-        return item.model_copy(update={"image_path": str(cached)})
+        return fetch_result  # cached, no candidate details
 
     best_item: Item | None = None
     best_score = -1.0
+    evaluated: list[CandidateResult] = []
 
     for candidate in candidates:
         url = candidate["url"]
+        cr_result = CandidateResult(
+            url=url,
+            source=candidate["source"],
+            source_score=candidate["source_score"],
+            status="rejected",
+        )
 
         # Download
         img = download_image(url)
         if not img:
+            cr_result.reject_reason = "download failed"
+            evaluated.append(cr_result)
             continue
+
+        cr_result.aspect_ratio = round(img.width / img.height, 3) if img.height else 99.0
 
         # Background removal
         if not skip_bg_removal:
             processed = remove_background(img)
             if not processed:
+                cr_result.reject_reason = "bg removal failed"
+                evaluated.append(cr_result)
                 continue
             img = processed
 
-        # Quality filters
+        # Quality metrics
         hf = height_fill(img)
+        cr = content_ratio(img)
+        cr_result.height_fill = round(hf, 3)
+        cr_result.content_ratio = round(cr, 3)
+        cr_result.quality_score = round(_quality_score(img), 3)
+
+        # Quality filter: height fill
         if hf < min_height_fill:
+            cr_result.reject_reason = f"height_fill={hf:.2f} < {min_height_fill}"
+            evaluated.append(cr_result)
             continue
 
-        # Score this candidate
-        qscore = _quality_score(img)
-        if qscore > best_score:
-            best_score = qscore
-            # Save to cache
+        cr_result.status = "accepted"
+
+        if cr_result.quality_score > best_score:
+            best_score = cr_result.quality_score
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             path = put_cached(key, buf.getvalue())
             best_item = item.model_copy(update={"image_path": str(path)})
 
-    return best_item or item
+        evaluated.append(cr_result)
+
+    # Mark the winner
+    if best_item and evaluated:
+        for cr in evaluated:
+            if cr.status == "accepted" and cr.quality_score == best_score:
+                cr.status = "winner"
+                break
+
+    fetch_result.item = best_item or item
+    fetch_result.candidates = evaluated
+    return fetch_result
 
 
 def fetch_and_process_image(

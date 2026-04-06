@@ -35,7 +35,7 @@ from vidforge.assets.bg_remove import content_ratio
 from vidforge.assets.bg_remove import height_fill
 from vidforge.assets.bg_remove import remove_background
 from vidforge.assets.images import download_image
-from vidforge.assets.images import fetch_best_image
+from vidforge.assets.images import fetch_best_image_debug
 from vidforge.debug import DebugScript
 from vidforge.models import Item
 
@@ -534,10 +534,11 @@ class ScalingDebug(DebugScript):
                 # Try all sources: Fandom (top 3) → AniList → Jikan
                 # Download + bg remove all candidates, pick best quality score
                 item = Item(name=name, value=height)
-                result = fetch_best_image(item, wiki=show["wiki"], wiki_page=wiki_page)
+                result = fetch_best_image_debug(item, wiki=show["wiki"], wiki_page=wiki_page)
 
-                img_path = result.image_path
-                source_used = result.image_path.split("/")[-2] if result.image_path else None
+                img_path = result.item.image_path
+                winner = next((c for c in result.candidates if c.status == "winner"), None)
+                source_used = winner.source if winner else None
                 fail_reason = "no image passed quality from any source" if not img_path else None
 
                 has_img = img_path is not None
@@ -557,6 +558,41 @@ class ScalingDebug(DebugScript):
                         "source": source_used,
                     }
                 )
+
+                # Per-character candidate details
+                if result.candidates:
+                    char_section = report.add_section(f"{name} — Candidates")
+                    char_section.add_stat("total", str(len(result.candidates)))
+                    if winner:
+                        char_section.add_stat(
+                            "winner", f"{winner.source} (q={winner.quality_score:.2f})"
+                        )
+
+                    cand_rows = [
+                        ["Source", "SrcScore", "QScore", "HF", "CR", "AR", "Status"],
+                    ]
+                    for c in result.candidates:
+                        icon = {"winner": "🏆", "accepted": "✅", "rejected": "❌"}.get(
+                            c.status, "?"
+                        )
+                        status_text = c.status
+                        if c.reject_reason:
+                            status_text = f"{icon} {c.reject_reason}"
+                        else:
+                            status_text = f"{icon} {c.status}"
+                        cand_rows.append(
+                            [
+                                c.source,
+                                f"{c.source_score:.1f}",
+                                f"{c.quality_score:.2f}",
+                                f"{c.height_fill:.2f}",
+                                f"{c.content_ratio:.2f}",
+                                f"{c.aspect_ratio:.2f}",
+                                status_text,
+                            ]
+                        )
+                    char_section.add_table(cand_rows[0], cand_rows[1:])
+
                 total_chars += 1
                 time.sleep(0.3)
 
