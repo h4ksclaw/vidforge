@@ -55,7 +55,7 @@ def _graphql(query: str, variables: dict[str, object]) -> dict[str, Any] | None:
         return None
 
 
-def find_character_image(name: str) -> str | None:
+def find_character_image(name: str, show: str = "") -> str | None:
     """Find a character image URL via AniList.
 
     Uses the exact character search which returns the best match.

@@ -33,13 +33,14 @@ def _get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | No
         return None
 
 
-def find_character_image(name: str) -> str | None:
+def find_character_image(name: str, show: str = "") -> str | None:
     """Find a character image URL via Jikan.
 
-    Searches MAL characters by name, returns the first result's
-    large JPG/WebP image URL. Prefers WebP for quality.
+    Searches MAL characters by name, optionally with show context for accuracy.
+    Returns the first result's large JPG/WebP image URL. Prefers WebP for quality.
     """
-    data = _get("/characters", params={"q": name, "limit": 1})
+    q = f"{name} {show}".strip() if show else name
+    data = _get("/characters", params={"q": q, "limit": 1})
     if not data:
         return None
 
@@ -56,12 +57,13 @@ def find_character_image(name: str) -> str | None:
     return cast(str | None, jpg)
 
 
-def search_character_images(name: str, max_results: int = 5) -> list[str]:
+def search_character_images(name: str, max_results: int = 5, show: str = "") -> list[str]:
     """Search for character images via Jikan (returns multiple results).
 
     Returns image URLs sorted by relevance (MAL's default ordering).
     """
-    data = _get("/characters", params={"q": name, "limit": max_results})
+    q = f"{name} {show}".strip() if show else name
+    data = _get("/characters", params={"q": q, "limit": max_results})
     if not data:
         return []
 

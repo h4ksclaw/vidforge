@@ -256,7 +256,7 @@ def render_scaling_strip(
     chars: list of {"name", "height_cm", "img_path", "processed_url"}
     """
     if not chars:
-        strip = Image.new("RGBA", (400, STRIP_HEIGHT), (10, 10, 20, 255))
+        strip = Image.new("RGBA", (400, STRIP_HEIGHT), (80, 30, 140, 255))
         p = Path(f"/tmp/vf_scaling_{show_name.replace(' ', '_')}.png")
         strip.save(p)
         return p, {}
@@ -293,7 +293,7 @@ def render_scaling_strip(
     total_w = sum(char_widths) + (len(chars_sorted) - 1) * gap + pad * 2
 
     # Build strip
-    strip = Image.new("RGBA", (total_w, STRIP_HEIGHT), (10, 10, 20, 255))
+    strip = Image.new("RGBA", (total_w, STRIP_HEIGHT), (80, 30, 140, 255))
     sd = ImageDraw.Draw(strip)
 
     # Ground line
@@ -534,7 +534,9 @@ class ScalingDebug(DebugScript):
                 # Try all sources: Fandom (top 3) → AniList → Jikan
                 # Download + bg remove all candidates, pick best quality score
                 item = Item(name=name, value=height)
-                result = fetch_best_image_debug(item, wiki=show["wiki"], wiki_page=wiki_page)
+                result = fetch_best_image_debug(
+                    item, wiki=show["wiki"], wiki_page=wiki_page, show_name=show["name"]
+                )
 
                 img_path = result.item.image_path
                 winner = next((c for c in result.candidates if c.status == "winner"), None)

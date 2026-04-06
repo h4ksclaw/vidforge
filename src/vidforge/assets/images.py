@@ -25,13 +25,19 @@ from vidforge.sources.jikan import find_character_image as jikan_find
 HEADERS = {"User-Agent": "VidForge/0.1 (github.com/h4ksclaw/vidforge)"}
 
 
-def _make_thumbnail(img: Image.Image, max_h: int = 200) -> Image.Image | None:
-    """Create a small thumbnail for debug report uploads."""
+def _make_thumbnail(
+    img: Image.Image, max_h: int = 200, bg: tuple[int, ...] = (80, 30, 140, 255)
+) -> Image.Image | None:
+    """Create a small thumbnail for debug report uploads with colored background."""
     if not img or img.height < 10:
         return None
     ratio = max_h / img.height
     new_w = int(img.width * ratio)
-    return img.resize((new_w, max_h), Image.LANCZOS)
+    thumb = img.resize((new_w, max_h), Image.LANCZOS)
+    # Composite onto colored background
+    canvas = Image.new("RGBA", thumb.size, bg)
+    canvas.alpha_composite(thumb)
+    return canvas
 
 
 @dataclass
@@ -137,6 +143,7 @@ def gather_candidates(
     name: str,
     wiki: str = "",
     wiki_page: str = "",
+    show_name: str = "",
     max_fandom: int = 3,
 ) -> list[dict[str, Any]]:
     """Gather candidate image URLs from all available sources.
@@ -155,7 +162,7 @@ def gather_candidates(
 
     # 2. AniList — single best match
     try:
-        anilist_url = anilist_find(name)
+        anilist_url = anilist_find(name, show=show_name)
         if anilist_url and not any(c["url"] == anilist_url for c in candidates):
             candidates.append({"url": anilist_url, "source": "anilist", "source_score": 3.0})
     except (ImportError, OSError):
@@ -163,7 +170,7 @@ def gather_candidates(
 
     # 3. Jikan / MAL — single best match
     try:
-        jikan_url = jikan_find(name)
+        jikan_url = jikan_find(name, show=show_name)
         if jikan_url and not any(c["url"] == jikan_url for c in candidates):
             candidates.append({"url": jikan_url, "source": "jikan", "source_score": 2.0})
     except (ImportError, OSError):
@@ -206,6 +213,7 @@ def fetch_best_image(
     item: Item,
     wiki: str = "",
     wiki_page: str = "",
+    show_name: str = "",
     skip_bg_removal: bool = False,
     min_height_fill: float = 0.55,
 ) -> Item:
@@ -220,6 +228,7 @@ def fetch_best_image(
         item,
         wiki=wiki,
         wiki_page=wiki_page,
+        show_name=show_name,
         skip_bg_removal=skip_bg_removal,
         min_height_fill=min_height_fill,
     )
@@ -230,6 +239,7 @@ def fetch_best_image_debug(
     item: Item,
     wiki: str = "",
     wiki_page: str = "",
+    show_name: str = "",
     skip_bg_removal: bool = False,
     min_height_fill: float = 0.55,
 ) -> FetchResult:
@@ -238,7 +248,9 @@ def fetch_best_image_debug(
     Returns FetchResult with per-candidate status, scores, and reject reasons.
     """
     if not item.image_url:
-        candidates = gather_candidates(item.name, wiki=wiki, wiki_page=wiki_page)
+        candidates = gather_candidates(
+            item.name, wiki=wiki, wiki_page=wiki_page, show_name=show_name
+        )
     else:
         candidates = [{"url": item.image_url, "source": "direct", "source_score": 1.0}]
 
