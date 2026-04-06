@@ -16,6 +16,7 @@ from vidforge.assets.cache import item_cache_key
 from vidforge.assets.cache import put_cached
 from vidforge.models import Item
 from vidforge.sources.anilist import find_character_image as anilist_find
+from vidforge.sources.anilist import search_character_images as anilist_search
 from vidforge.sources.fandom import BAD_IMAGE_KEYWORDS
 from vidforge.sources.fandom import _score_image_url
 from vidforge.sources.fandom import get_image_url
@@ -143,7 +144,7 @@ def gather_candidates(
     wiki: str = "",
     wiki_page: str = "",
     show_name: str = "",
-    max_fandom: int = 3,
+    max_fandom: int = 6,
 ) -> list[dict[str, Any]]:
     """Gather candidate image URLs from all available sources.
 
@@ -159,11 +160,15 @@ def gather_candidates(
         for score, url in fandom_urls:
             candidates.append({"url": url, "source": "fandom", "source_score": score})
 
-    # 2. AniList — single best match
+    # 2. AniList — try multiple results for better coverage
     try:
         anilist_url = anilist_find(name, show=show_name)
         if anilist_url and not any(c["url"] == anilist_url for c in candidates):
             candidates.append({"url": anilist_url, "source": "anilist", "source_score": 3.0})
+        # Also try broader search for more candidates
+        for url in anilist_search(name, max_results=3)[1:]:  # skip first (already tried)
+            if url and not any(c["url"] == url for c in candidates):
+                candidates.append({"url": url, "source": "anilist", "source_score": 2.0})
     except (ImportError, OSError):
         pass
 
