@@ -100,15 +100,15 @@ def _quality_score(img: Image.Image, source_score: float = 1.0) -> float:
         hf_score = 0.0
 
     # Content ratio: sweet spot is 0.3-0.75
-    # Wider is OK for full-body poses, very narrow is fine for slim characters
+    # > 0.85 is almost certainly a face/torso crop
     if 0.3 <= cr <= 0.75:
         cr_score = 1.0
-    elif 0.75 < cr <= 0.9:
-        cr_score = 0.7  # wide character or slightly tight crop, still often full body
+    elif 0.75 < cr <= 0.85:
+        cr_score = 0.5  # questionable
     elif 0.15 <= cr < 0.3:
-        cr_score = 0.6  # very slim character
-    elif cr > 0.9:
-        cr_score = 0.3  # likely a face/torso crop
+        cr_score = 0.5  # very slim character
+    elif cr > 0.85:
+        cr_score = 0.15  # almost certainly a crop
     else:
         cr_score = 0.1
 
@@ -127,10 +127,10 @@ def _quality_score(img: Image.Image, source_score: float = 1.0) -> float:
     # Source score bonus: prefer images from sources that scored well on filename
     # fandom "render" (5.0) > fandom generic (1.0) > anilist (3.0) > jikan (2.0)
     # Normalize to 0-1 bonus range
-    source_bonus = min(source_score / 5.0, 1.0) * 0.15  # max 0.15 bonus
+    source_bonus = min(source_score / 5.0, 1.0) * 0.08  # max 0.08 bonus
 
-    # Weighted combination
-    return hf_score * 0.40 + cr_score * 0.30 + ar_score * 0.15 + source_bonus
+    # Weighted combination — content metrics dominate
+    return hf_score * 0.40 + cr_score * 0.35 + ar_score * 0.15 + source_bonus
 
 
 def gather_candidates(
