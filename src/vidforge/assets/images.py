@@ -145,6 +145,7 @@ def gather_candidates(
     wiki_page: str = "",
     show_name: str = "",
     max_fandom: int = 6,
+    max_rembg: int = 3,  # only bg-remove top N candidates per source
 ) -> list[dict[str, Any]]:
     """Gather candidate image URLs from all available sources.
 
@@ -244,10 +245,13 @@ def fetch_best_image_debug(
     show_name: str = "",
     skip_bg_removal: bool = False,
     min_height_fill: float = 0.55,
+    max_rembg: int = 3,
 ) -> FetchResult:
     """Fetch best image with full candidate evaluation details for debugging.
 
-    Returns FetchResult with per-candidate status, scores, and reject reasons.
+    max_rembg limits how many candidates get the expensive bg-removal step.
+    All candidates are still downloaded and scored by cheap heuristics.
+    Only the top max_rembg by source_score get full processing.
     """
     if not item.image_url:
         candidates = gather_candidates(
@@ -271,7 +275,12 @@ def fetch_best_image_debug(
     best_score = -1.0
     evaluated: list[CandidateResult] = []
 
-    for candidate in candidates:
+    # Sort by source_score descending — cheap heuristic pre-filter
+    # Only run expensive bg-removal on top max_rembg candidates
+    candidates_sorted = sorted(candidates, key=lambda c: -c["source_score"])
+    rembg_count = 0
+
+    for candidate in candidates_sorted:
         url = candidate["url"]
         cr_result = CandidateResult(
             url=url,
@@ -296,14 +305,19 @@ def fetch_best_image_debug(
             raw_thumb.save(raw_thumb_path)
             cr_result.raw_url = raw_thumb_path
 
-        # Background removal
+        # Background removal — only for top max_rembg candidates by source_score
         if not skip_bg_removal:
+            if rembg_count >= max_rembg:
+                cr_result.reject_reason = "skipped (max_rembg reached)"
+                evaluated.append(cr_result)
+                continue
             processed = remove_background(img)
             if not processed:
                 cr_result.reject_reason = "bg removal failed"
                 evaluated.append(cr_result)
                 continue
             img = processed
+            rembg_count += 1
             # Save processed thumbnail for debug reports
             proc_thumb = _make_thumbnail(img, max_h=200)
             if proc_thumb:
