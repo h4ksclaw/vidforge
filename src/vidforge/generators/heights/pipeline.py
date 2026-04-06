@@ -9,6 +9,7 @@ render_video.
 from __future__ import annotations
 
 import importlib
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -28,7 +29,11 @@ from vidforge.assets.music import fetch_music
 from vidforge.models import Item
 from vidforge.models import Recipe
 from vidforge.models import Target
-from vidforge.sources.fandom import find_best_image
+from vidforge.sources.anilist import find_character_image as anilist_find
+from vidforge.sources.fandom import find_best_image as fandom_find
+from vidforge.sources.jikan import find_character_image as jikan_find
+
+logger = logging.getLogger(__name__)
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -90,25 +95,63 @@ def fetch_music_pipeline(load_recipe: Recipe) -> Path | None:
 # ─── Image fetching ──────────────────────────────────────────────────────────
 
 
+def _find_image_fallback_chain(
+    name: str,
+    wiki: str = "",
+    wiki_page: str = "",
+) -> str | None:
+    """Try multiple sources to find a character image.
+
+    Fallback order: Fandom wiki → AniList → Jikan (MAL).
+    Logs which source succeeded for debugging.
+    """
+    # 1. Fandom wiki (best quality — multiple images scored)
+    if wiki:
+        page = wiki_page or name
+        url = fandom_find(wiki, page)
+        if url:
+            logger.info("[fandom] Found image for %s", name)
+            return url
+        logger.debug("[fandom] No image for %s on %s", name, wiki)
+
+    # 2. AniList (clean profile renders)
+    url = anilist_find(name)
+    if url:
+        logger.info("[anilist] Found image for %s", name)
+        return url
+    logger.debug("[anilist] No image for %s", name)
+
+    # 3. Jikan / MAL (profile pictures)
+    url = jikan_find(name)
+    if url:
+        logger.info("[jikan] Found image for %s", name)
+        return url
+    logger.debug("[jikan] No image for %s", name)
+
+    return None
+
+
 def fetch_images(
     build_items: list[Item],
     load_recipe: Recipe,
 ) -> list[Item]:
-    """Find best images for each character via Fandom API."""
-    wiki = load_recipe.source_config.get("wiki", "")
-    if not wiki:
-        return build_items
+    """Find best images for each character using a fallback chain.
 
+    Tries Fandom wiki first (highest quality, multiple candidates), then
+    AniList, then Jikan/MAL. Falls through to next source on failure.
+    """
+    wiki = load_recipe.source_config.get("wiki", "")
     characters = load_characters(load_recipe)
     char_pages = {c["name"]: c.get("wiki_page", c["name"]) for c in characters}
 
     result = []
     for item in build_items:
         page = char_pages.get(item.name, item.name)
-        url = find_best_image(wiki, page)
+        url = _find_image_fallback_chain(item.name, wiki=wiki, wiki_page=page)
         if url:
             result.append(item.model_copy(update={"image_url": url}))
         else:
+            logger.warning("No image found for %s from any source", item.name)
             result.append(item)
     return result
 
