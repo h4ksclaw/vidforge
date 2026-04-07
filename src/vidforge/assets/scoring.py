@@ -109,6 +109,109 @@ def symmetry_score(img: Image.Image) -> float:
     return round(iou, 4)
 
 
+def vertical_straightness(img: Image.Image) -> float:
+    """Measure how straight/uniform the character silhouette is from top to bottom.
+
+    A good standing character render has a roughly uniform width from head to feet.
+    Action poses, S-curves, leaning, or twisting create non-uniform width.
+
+    Method: divide image into horizontal strips, measure content width in each,
+    compute coefficient of variation. Low CV = straight standing pose.
+
+    Returns 0-1 score where higher = more straight/uniform.
+    """
+    if not img or img.mode != "RGBA" or img.size[1] < 30:
+        return 0.0
+
+    alpha = (np.array(img.split()[3]) > 64).astype(np.uint8)
+    h, w = alpha.shape
+
+    # Divide into vertical strips (skip top 5% and bottom 5% — head/feet edges are noisy)
+    strip_count = min(20, h // 10)
+    if strip_count < 5:
+        return 0.5
+
+    margin = int(h * 0.05)
+    strip_height = (h - 2 * margin) // strip_count
+
+    widths: list[float] = []
+    for i in range(strip_count):
+        y_start = margin + i * strip_height
+        y_end = y_start + strip_height
+        strip = alpha[y_start:y_end, :]
+        # Measure content width: distance between leftmost and rightmost opaque pixel
+        row_has_content = strip.any(axis=1)
+        if not row_has_content.any():
+            continue
+        # Find left/right bounds across all rows in strip
+        col_sums = strip.sum(axis=0)
+        nonzero_cols = np.where(col_sums > 0)[0]
+        if len(nonzero_cols) == 0:
+            continue
+        width = float(nonzero_cols[-1] - nonzero_cols[0]) / w
+        widths.append(width)
+
+    if len(widths) < 3:
+        return 0.5
+
+    # Coefficient of variation of widths
+    mean_w = np.mean(widths)
+    if mean_w == 0:
+        return 0.0
+    cv = float(np.std(widths) / mean_w)
+
+    # Low CV = straight. Typical standing pose: CV 0.1-0.3
+    # Action pose / S-curve: CV 0.4+
+    # Map: CV 0.1 → 1.0, CV 0.5 → 0.0
+    score = max(0.0, 1.0 - (cv - 0.10) / 0.40)
+    return round(min(max(score, 0.0), 1.0), 4)
+
+
+def foot_visibility_score(img: Image.Image) -> float:
+    """Measure how clearly feet/ground contact is visible in the bottom of the image.
+
+    A good standing character render shows feet at the bottom of the frame.
+    Crops and action shots often cut off or obscure the feet.
+
+    Method: check the bottom 15% of the image for content presence and width.
+    Feet create a distinctive wide content area at the very bottom.
+
+    Returns 0-1 score where higher = better foot visibility.
+    """
+    if not img or img.mode != "RGBA" or img.size[1] < 30:
+        return 0.0
+
+    alpha = (np.array(img.split()[3]) > 64).astype(np.uint8)
+    h, _w = alpha.shape
+
+    # Bottom 15% of image
+    bottom_start = int(h * 0.85)
+    bottom_zone = alpha[bottom_start:, :]
+
+    # Content fill ratio in bottom zone
+    fill = float(bottom_zone.sum()) / bottom_zone.size
+
+    # Also check: is there content in the very last 5%?
+    very_bottom = alpha[int(h * 0.95) :, :]
+    very_bottom_fill = float(very_bottom.sum()) / very_bottom.size if very_bottom.size > 0 else 0.0
+
+    # Scoring:
+    # Good: fill > 0.20 (feet visible) and very_bottom > 0.10 (touching ground)
+    # OK: fill > 0.10 (some content but maybe cropped)
+    # Bad: fill < 0.05 (no feet at all)
+
+    if fill >= 0.20 and very_bottom_fill >= 0.10:
+        return 1.0  # clear feet
+    elif fill >= 0.15:
+        return 0.7  # probably feet
+    elif fill >= 0.10:
+        return 0.4  # some content, might be cropped
+    elif fill >= 0.05:
+        return 0.2  # minimal content
+    else:
+        return 0.0  # no feet
+
+
 def edge_density_score(img: Image.Image) -> float:
     """Measure edge complexity in a bg-removed image.
 
@@ -169,4 +272,6 @@ def compute_all_features(img: Image.Image) -> dict:
         "all_thirds_present": thirds["all_present"],
         "symmetry": symmetry_score(img),
         "edge_smoothness": edge_density_score(img),
+        "vertical_straightness": vertical_straightness(img),
+        "foot_visibility": foot_visibility_score(img),
     }

@@ -636,7 +636,6 @@ class ScalingDebug(DebugScript):
                             c.status, "?"
                         )
                         reason = c.reject_reason if c.reject_reason else c.status
-                        # Pose indicator
                         pose_parts = []
                         if c.pose_head:
                             pose_parts.append("H")
@@ -647,7 +646,6 @@ class ScalingDebug(DebugScript):
                             if c.pose_full_body
                             else ("·".join(pose_parts) if pose_parts else "—")
                         )
-                        # Thirds indicator
                         thirds_str = "✅" if c.all_thirds_present else "·"
                         cand_rows.append(
                             [
