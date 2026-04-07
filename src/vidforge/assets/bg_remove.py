@@ -36,7 +36,7 @@ def remove_background(img: Image.Image) -> Image.Image | None:
         result = result.convert("RGBA")
 
     alpha = np.array(result.split()[3])
-    binary = (alpha > 128).astype(np.uint8)
+    binary = (alpha > 64).astype(np.uint8)
 
     rows = np.where(binary.max(axis=1))[0]
     cols = np.where(binary.max(axis=0))[0]
@@ -61,7 +61,7 @@ def remove_background(img: Image.Image) -> Image.Image | None:
         if result2.mode != "RGBA":
             result2 = result2.convert("RGBA")
         alpha2 = np.array(result2.split()[3])
-        binary2 = (alpha2 > 128).astype(np.uint8)
+        binary2 = (alpha2 > 64).astype(np.uint8)
         rows2 = np.where(binary2.max(axis=1))[0]
         if len(rows2) > 0:
             content_h2 = rows2[-1] - rows2[0]

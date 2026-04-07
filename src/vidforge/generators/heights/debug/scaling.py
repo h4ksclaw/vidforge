@@ -86,6 +86,19 @@ SHOWS: list[dict[str, Any]] = [
         ],
     },
     {
+        "name": "Evangelion",
+        "anilist_search": "Neon Genesis Evangelion",
+        "wiki": "evangelion.fandom.com",
+        "characters": [
+            ("Asuka", 157, "Asuka_Langley_Soryu"),
+            ("Rei", 150, "Rei_Ayanami"),
+            ("Shinji", 163, "Shinji_Ikari"),
+            ("Misato", 166, "Misato_Katsuragi"),
+            ("Kaworu", 165, "Kaworu_Nagisa"),
+            ("Ritsuko", 170, "Ritsuko_Akagi"),
+        ],
+    },
+    {
         "name": "Attack on Titan",
         "wiki": "attackontitan.fandom.com",
         "characters": [
@@ -122,6 +135,7 @@ SHOWS: list[dict[str, Any]] = [
     },
     {
         "name": "Demon Slayer",
+        "anilist_search": "Kimetsu no Yaiba",
         "wiki": "kimetsu-no-yaiba.fandom.com",
         "characters": [
             ("Nezuko", 153, "Nezuko_Kamado"),
@@ -508,8 +522,13 @@ class ScalingDebug(DebugScript):
     per-character metrics, uploaded to s.h4ks.com.
     """
 
-    def run(self, limit: int | None = None) -> str | None:  # type: ignore[override]
+    def run(self, limit: int | None = None, show_filter: str | None = None) -> str | None:  # type: ignore[override]
         shows = SHOWS[:limit] if limit else SHOWS
+        if show_filter:
+            shows = [s for s in shows if show_filter.lower() in s["name"].lower()]
+        if not shows:
+            print(f"No shows matching '{show_filter}'")
+            return None
         report = self.report(
             f"Scaling Debug — {len(shows)} Shows",
             "Live test: height extraction + image scaling for visual verification",
@@ -535,7 +554,12 @@ class ScalingDebug(DebugScript):
                 # Download + bg remove all candidates, pick best quality score
                 item = Item(name=name, value=height)
                 result = fetch_best_image_debug(
-                    item, wiki=show["wiki"], wiki_page=wiki_page, show_name=show["name"]
+                    item,
+                    wiki=show["wiki"],
+                    wiki_page=wiki_page,
+                    show_name=show["name"],
+                    show_search_term=show.get("anilist_search", ""),
+                    max_rembg=6,
                 )
 
                 img_path = result.item.image_path
@@ -571,8 +595,8 @@ class ScalingDebug(DebugScript):
                         )
 
                     # Upload thumbnails and show candidate images
-                    for c in result.candidates:
-                        label_parts = [c.source]
+                    for idx, c in enumerate(result.candidates):
+                        label_parts = [f"#{idx + 1}", c.source]
                         if c.status == "winner":
                             label_parts.append("🏆")
                         if c.reject_reason:
@@ -591,21 +615,54 @@ class ScalingDebug(DebugScript):
 
                     # Also add the metrics table below images
                     cand_rows = [
-                        ["Source", "Src", "Q", "HF", "CR", "AR", "Status"],
+                        [
+                            "#",
+                            "Source",
+                            "Src",
+                            "Q",
+                            "HF",
+                            "CR",
+                            "AR",
+                            "Pose",
+                            "CV",
+                            "3rd",
+                            "Sym",
+                            "Edge",
+                            "Status",
+                        ],
                     ]
-                    for c in result.candidates:
+                    for idx, c in enumerate(result.candidates):
                         icon = {"winner": "🏆", "accepted": "✅", "rejected": "❌"}.get(
                             c.status, "?"
                         )
                         reason = c.reject_reason if c.reject_reason else c.status
+                        # Pose indicator
+                        pose_parts = []
+                        if c.pose_head:
+                            pose_parts.append("H")
+                        if c.pose_feet:
+                            pose_parts.append("F")
+                        pose_str = (
+                            "✅"
+                            if c.pose_full_body
+                            else ("·".join(pose_parts) if pose_parts else "—")
+                        )
+                        # Thirds indicator
+                        thirds_str = "✅" if c.all_thirds_present else "·"
                         cand_rows.append(
                             [
+                                f"#{idx + 1}",
                                 c.source,
                                 f"{c.source_score:.1f}",
                                 f"{c.quality_score:.2f}",
                                 f"{c.height_fill:.2f}",
                                 f"{c.content_ratio:.2f}",
                                 f"{c.aspect_ratio:.2f}",
+                                pose_str,
+                                f"{c.color_variance:.2f}",
+                                thirds_str,
+                                f"{c.symmetry:.2f}",
+                                f"{c.edge_smoothness:.2f}",
                                 f"{icon} {reason}",
                             ]
                         )
@@ -635,7 +692,7 @@ class ScalingDebug(DebugScript):
                 h_label = f"{h_val / 100:.1f}m" if h_val >= 500 else f"{h_val}cm"
                 fill = c.get("content_fill", 0)
                 cr = c.get("content_ratio", 0)
-                source = c.get("source", "?")
+                source = c.get("source") or "cached"
 
                 if c["has_image"]:
                     fill_flag = "" if fill >= 0.55 else " ⚠️"
@@ -681,8 +738,9 @@ class ScalingDebug(DebugScript):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Debug scaling across shows")
     parser.add_argument("--limit", type=int, default=None, help="Test only first N shows")
+    parser.add_argument("--show", type=str, default=None, help="Test only shows matching this name")
     args = parser.parse_args()
-    ScalingDebug()(limit=args.limit)
+    ScalingDebug()(limit=args.limit, show_filter=args.show)
 
 
 if __name__ == "__main__":

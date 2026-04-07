@@ -17,3 +17,4 @@ output/
 .coverage
 htmlcov/
 .pytest_cache/
+src/vidforge/assets/pose_landmarker.task

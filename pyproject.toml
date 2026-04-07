@@ -28,6 +28,7 @@ all = [
     "vidforge[youtube]",
     "vidforge[dev]",
     "vidforge[music]",
+    "vidforge[debug]",
 ]
 youtube = [
     "google-api-python-client>=2.100",
@@ -36,6 +37,9 @@ youtube = [
 ]
 music = [
     "yt-dlp>=2023.0",
+]
+debug = [
+    "streamlit>=1.40",
 ]
 dev = [
     "pytest>=7.0",
